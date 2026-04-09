@@ -1,0 +1,766 @@
+/* ═══════════════════════════════════════════════════════════════════
+   OT Gate — Design System
+   Two-party protocol aesthetic: sender (blue) | channel (gray) | receiver (amber)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Theme variables ───────────────────────────────────────────────── */
+
+[data-theme='dark'] {
+  --background: #0f1117;
+  --surface: #1a1b26;
+  --surface-alt: #222333;
+  --text: #c9ccd6;
+  --text-muted: #6b7084;
+  --accent: #7c8aff;
+  --accent-hover: #9da6ff;
+  --border: #2d2f3d;
+  --code-bg: #1e1f2e;
+  --sender-color: #60a5fa;
+  --sender-surface: #172237;
+  --receiver-color: #fbbf24;
+  --receiver-surface: #27220f;
+  --channel-color: #9ca3af;
+  --success: #34d399;
+  --warning: #fb923c;
+  --hidden: #ef4444;
+}
+
+[data-theme='light'] {
+  --background: #f8f9fb;
+  --surface: #ffffff;
+  --surface-alt: #f0f1f4;
+  --text: #374151;
+  --text-muted: #6b7280;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --border: #dfe2e8;
+  --code-bg: #eef0f4;
+  --sender-color: #2563eb;
+  --sender-surface: #eff6ff;
+  --receiver-color: #d97706;
+  --receiver-surface: #fffbeb;
+  --channel-color: #6b7280;
+  --success: #059669;
+  --warning: #ea580c;
+  --hidden: #dc2626;
+}
+
+/* ── Reset & base ──────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Typography ────────────────────────────────────────────────────── */
+
+h1, h2, h3 {
+  color: var(--text);
+  line-height: 1.25;
+  margin: 0 0 0.75rem;
+}
+
+h1 { font-size: 1.85rem; letter-spacing: -0.02em; }
+h2 { font-size: 1.5rem; margin-top: 2.5rem; }
+h3 { font-size: 1.15rem; margin-top: 1.5rem; color: var(--text-muted); }
+
+p { margin: 0 0 1rem; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+code {
+  font-family: ui-monospace, 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-size: 0.875em;
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+strong { color: var(--text); }
+
+ul { padding-left: 1.5rem; margin: 0 0 1rem; }
+li { margin-bottom: 0.35rem; }
+
+sub { font-size: 0.75em; }
+
+/* ── Layout ────────────────────────────────────────────────────────── */
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.section {
+  padding: 2.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.section:last-child { border-bottom: none; }
+
+.subsection { margin-top: 2rem; }
+
+/* ── Header ────────────────────────────────────────────────────────── */
+
+.site-header {
+  position: relative;
+  padding: 2rem 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* ── Theme toggle ──────────────────────────────────────────────────── */
+
+.theme-toggle {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s;
+  z-index: 10;
+}
+.theme-toggle:hover {
+  background: var(--surface-alt);
+  border-color: var(--accent);
+}
+
+/* ── Cards & panels ────────────────────────────────────────────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.sender-panel {
+  border-left: 3px solid var(--sender-color);
+  background: var(--sender-surface);
+}
+
+.receiver-panel {
+  border-left: 3px solid var(--receiver-color);
+  background: var(--receiver-surface);
+}
+
+.channel-panel {
+  border-left: 3px solid var(--channel-color);
+}
+
+.panel-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.75rem;
+}
+
+.panel-label.sender { color: var(--sender-color); }
+.panel-label.receiver { color: var(--receiver-color); }
+.panel-label.channel { color: var(--channel-color); }
+
+/* ── OT visual (Section A1) ───────────────────────────────────────── */
+
+.ot-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.ot-visual-sender,
+.ot-visual-receiver {
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  min-width: 140px;
+  text-align: center;
+}
+
+.ot-visual-sender {
+  background: var(--sender-surface);
+  border: 1px solid var(--sender-color);
+}
+
+.ot-visual-receiver {
+  background: var(--receiver-surface);
+  border: 1px solid var(--receiver-color);
+}
+
+.ot-visual-channel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.ot-visual-arrow {
+  font-size: 2rem;
+  color: var(--channel-color);
+  line-height: 1;
+}
+
+.ot-visual-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.5rem;
+}
+
+.ot-visual-msg {
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  margin: 0.25rem 0;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+.ot-visual-msg.unlocked {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.ot-visual-msg.locked,
+.ot-visual-msg.hidden-msg {
+  background: color-mix(in srgb, var(--hidden) 12%, transparent);
+  color: var(--hidden);
+  opacity: 0.8;
+}
+
+.ot-visual-choice {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--receiver-color);
+}
+
+/* ── Protocol flow diagram (Section B1) ────────────────────────────── */
+
+.protocol-flow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+}
+
+.flow-col {
+  padding: 0.75rem;
+}
+
+.flow-header {
+  font-weight: 700;
+  text-align: center;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 0.5rem;
+}
+
+.flow-step {
+  padding: 0.6rem 0;
+  border-bottom: 1px dashed var(--border);
+  min-height: 3.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.flow-step:last-child { border-bottom: none; }
+
+.flow-sender .flow-step { color: var(--sender-color); }
+.flow-receiver .flow-step { color: var(--receiver-color); }
+
+.flow-channel .flow-step {
+  justify-content: center;
+  text-align: center;
+  color: var(--channel-color);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+/* ── OT Demo (Section B2) ─────────────────────────────────────────── */
+
+.ot-demo {
+  display: grid;
+  grid-template-columns: 1fr 200px 1fr;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+@media (max-width: 860px) {
+  .ot-demo {
+    grid-template-columns: 1fr;
+  }
+}
+
+.demo-sender,
+.demo-receiver {
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.demo-sender {
+  background: var(--sender-surface);
+  border: 1px solid var(--sender-color);
+}
+
+.demo-receiver {
+  background: var(--receiver-surface);
+  border: 1px solid var(--receiver-color);
+}
+
+.demo-channel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 2.5rem;
+}
+
+/* ── Channel message cards ─────────────────────────────────────────── */
+
+.channel-msg {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  width: 100%;
+  animation: channelSlide 0.4s ease-out;
+  text-align: center;
+}
+
+.channel-msg .direction {
+  display: block;
+  font-weight: 600;
+  color: var(--channel-color);
+  margin-bottom: 0.25rem;
+}
+
+.channel-msg .payload {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+@keyframes channelSlide {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Form elements ─────────────────────────────────────────────────── */
+
+textarea {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+  margin-bottom: 0.75rem;
+}
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.radio-group {
+  display: flex;
+  gap: 1.25rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+input[type='radio'] {
+  accent-color: var(--receiver-color);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-alt);
+  border-color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-sender {
+  border-color: var(--sender-color);
+  color: var(--sender-color);
+}
+.btn-sender:hover:not(:disabled) {
+  background: var(--sender-surface);
+}
+
+.btn-receiver {
+  border-color: var(--receiver-color);
+  color: var(--receiver-color);
+}
+.btn-receiver:hover:not(:disabled) {
+  background: var(--receiver-surface);
+}
+
+/* ── Hex output blocks ─────────────────────────────────────────────── */
+
+.hex-block {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  margin: 0.5rem 0;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.78rem;
+  word-break: break-all;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.hex-block .hex-label {
+  display: block;
+  font-family: system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  color: var(--text);
+}
+
+.hex-label.private { color: var(--warning); }
+
+/* ── Redacted / hidden message ─────────────────────────────────────── */
+
+.redacted-container {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 0.5rem 0;
+}
+
+.redacted-content {
+  padding: 0.6rem 0.8rem;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--hidden);
+  filter: blur(6px);
+  user-select: none;
+  word-break: break-all;
+  background: var(--code-bg);
+}
+
+.redacted-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--hidden);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  pointer-events: none;
+}
+
+/* ── Privacy audit ─────────────────────────────────────────────────── */
+
+.audit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+@media (max-width: 640px) {
+  .audit-grid { grid-template-columns: 1fr; }
+}
+
+.audit-box {
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.audit-box .audit-question {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.audit-box .audit-answer {
+  font-size: 0.9rem;
+  color: var(--success);
+}
+
+/* ── Decrypted message ─────────────────────────────────────────────── */
+
+.decrypted-msg {
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+  border: 1px solid var(--success);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0;
+  color: var(--success);
+  font-size: 0.95rem;
+}
+
+/* ── Tables ────────────────────────────────────────────────────────── */
+
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--surface-alt);
+}
+
+td { color: var(--text); }
+
+/* ── Correctness results (Section C1) ──────────────────────────────── */
+
+.correctness-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.result-icon { font-size: 1.3rem; }
+
+/* ── DDH points (Section C2) ──────────────────────────────────────── */
+
+.ddh-points {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.ddh-point {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+}
+
+.ddh-point-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.ddh-point-hex {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.78rem;
+  word-break: break-all;
+  color: var(--text);
+}
+
+/* ── Note / callout boxes ──────────────────────────────────────────── */
+
+.note {
+  background: var(--surface-alt);
+  border-left: 3px solid var(--accent);
+  padding: 0.75rem 1rem;
+  border-radius: 0 6px 6px 0;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+
+.warning-note {
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+  border-left: 3px solid var(--warning);
+  padding: 0.75rem 1rem;
+  border-radius: 0 6px 6px 0;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+
+/* ── Cross-reference map (Section D3) ──────────────────────────────── */
+
+.xref-map {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.xref-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+}
+
+.xref-item.current {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.xref-item strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+
+.site-footer {
+  padding: 2rem 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.site-footer a { color: var(--accent); }
+
+/* ── Spinner ───────────────────────────────────────────────────────── */
+
+.spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Step indicator ────────────────────────────────────────────────── */
+
+.step-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  margin-bottom: 0.5rem;
+}
+
+.step-tag.sender {
+  background: color-mix(in srgb, var(--sender-color) 15%, transparent);
+  color: var(--sender-color);
+}
+
+.step-tag.receiver {
+  background: color-mix(in srgb, var(--receiver-color) 15%, transparent);
+  color: var(--receiver-color);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.25rem; }
+  .ot-visual { flex-direction: column; }
+  .ot-visual-arrow { transform: rotate(90deg); }
+  .protocol-flow { grid-template-columns: 1fr; }
+  .protocol-flow .flow-channel { display: none; }
+}
