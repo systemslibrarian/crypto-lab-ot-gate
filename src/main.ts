@@ -58,7 +58,8 @@ function setupThemeToggle(): void {
 
 function header(): string {
   return `
-  <header class="site-header">
+  <a href="#section-b" class="skip-link">Skip to interactive demo</a>
+  <header class="site-header" role="banner">
     <div class="container header-inner">
       <div>
         <h1>🔐 OT Gate</h1>
@@ -73,9 +74,9 @@ function header(): string {
 
 function sectionA(): string {
   return `
-  <section id="section-a" class="section">
+  <section id="section-a" class="section" aria-labelledby="heading-a">
     <div class="container">
-      <h2>A. What is Oblivious Transfer?</h2>
+      <h2 id="heading-a">A. What is Oblivious Transfer?</h2>
 
       <div class="subsection">
         <h3>A1. The Core Problem</h3>
@@ -91,13 +92,13 @@ function sectionA(): string {
            learns the choice. If the sender sends both messages, the receiver gets
            both. OT solves this with cryptography.</p>
 
-        <div class="ot-visual">
+        <div class="ot-visual" role="img" aria-label="OT visual: Sender holds M0 and locked M1. Receiver with choice b=0 receives M0. M1 stays hidden.">
           <div class="ot-visual-sender">
             <div class="ot-visual-label" style="color:var(--sender-color)">Sender</div>
             <div class="ot-visual-msg unlocked">M<sub>0</sub></div>
             <div class="ot-visual-msg locked">🔒 M<sub>1</sub></div>
           </div>
-          <div class="ot-visual-channel">
+          <div class="ot-visual-channel" aria-hidden="true">
             <div class="ot-visual-arrow">→</div>
             <div class="ot-visual-label" style="color:var(--channel-color)">Channel</div>
           </div>
@@ -154,16 +155,16 @@ function sectionA(): string {
 
 function sectionB(): string {
   return `
-  <section id="section-b" class="section">
+  <section id="section-b" class="section" aria-labelledby="heading-b">
     <div class="container">
-      <h2>B. The Simplest OT Protocol</h2>
+      <h2 id="heading-b">B. The Simplest OT Protocol</h2>
 
       <div class="subsection">
         <h3>B1. Protocol Description</h3>
         <p>The Simplest OT uses <strong>Edwards25519</strong> (Curve25519 in twisted
            Edwards form). Let G be the base point.</p>
 
-        <div class="protocol-flow">
+        <div class="protocol-flow" role="img" aria-label="Protocol flow: Step 1 Sender generates scalar a and sends A=aG. Step 2 Receiver generates B based on choice bit b. Step 3 Sender derives keys k0 and k1, encrypts and sends E0 and E1. Step 4 Receiver derives key and decrypts chosen message.">
           <div class="flow-col flow-sender">
             <div class="flow-header" style="color:var(--sender-color)">Sender</div>
             <div class="flow-step">Generate scalar <em>a</em><br>Compute A&nbsp;=&nbsp;aG</div>
@@ -214,30 +215,31 @@ function sectionB(): string {
 
             <button id="btn-sender-init" class="btn btn-sender" type="button">Initialize Sender</button>
 
-            <div id="sender-output"></div>
+            <div id="sender-output" aria-live="polite"></div>
           </div>
 
           <!-- Channel -->
-          <div class="demo-channel" id="demo-channel"></div>
+          <div class="demo-channel" id="demo-channel" aria-live="polite" aria-label="Protocol messages exchanged between sender and receiver"></div>
 
           <!-- Receiver panel -->
           <div class="demo-receiver">
             <div class="panel-label receiver">Receiver</div>
 
             <label>Choice bit <em>b</em></label>
-            <div class="radio-group">
-              <label><input type="radio" name="choice" value="0" checked> I want M<sub>0</sub></label>
-              <label><input type="radio" name="choice" value="1"> I want M<sub>1</sub></label>
-            </div>
+            <fieldset class="radio-group">
+              <legend class="sr-only">Select which message to receive</legend>
+              <label for="choice-0"><input type="radio" id="choice-0" name="choice" value="0" checked> I want M<sub>0</sub></label>
+              <label for="choice-1"><input type="radio" id="choice-1" name="choice" value="1"> I want M<sub>1</sub></label>
+            </fieldset>
 
             <button id="btn-receiver-choose" class="btn btn-receiver" type="button" disabled>Make Selection</button>
 
-            <div id="receiver-output"></div>
+            <div id="receiver-output" aria-live="polite"></div>
           </div>
         </div>
 
         <!-- Privacy audit -->
-        <div id="privacy-audit" style="display:none">
+        <div id="privacy-audit" hidden>
           <h3>Privacy Audit</h3>
           <div id="sender-sees" class="note" style="margin-bottom:0.75rem"></div>
           <div class="audit-grid">
@@ -261,16 +263,16 @@ function sectionB(): string {
 
 function sectionC(): string {
   return `
-  <section id="section-c" class="section">
+  <section id="section-c" class="section" aria-labelledby="heading-c">
     <div class="container">
-      <h2>C. OT Correctness &amp; Security</h2>
+      <h2 id="heading-c">C. OT Correctness &amp; Security</h2>
 
       <div class="subsection">
         <h3>C1. Correctness Check</h3>
         <p>Run the full OT protocol for both choices and verify that each produces
            the correct plaintext.</p>
         <button id="btn-correctness" class="btn" type="button">Verify Correctness</button>
-        <div id="correctness-results"></div>
+        <div id="correctness-results" aria-live="polite"></div>
       </div>
 
       <div class="subsection">
@@ -278,7 +280,7 @@ function sectionC(): string {
         <p>Below are three Ed25519 points. Two are random (r·G) and one is of the
            form A&nbsp;+&nbsp;r·G (the b=1 case). Can you tell which is which?</p>
         <button id="btn-ddh" class="btn" type="button">Generate Points</button>
-        <div id="ddh-results"></div>
+        <div id="ddh-results" aria-live="polite"></div>
       </div>
 
       <div class="subsection">
@@ -300,9 +302,9 @@ function sectionC(): string {
 
 function sectionD(): string {
   return `
-  <section id="section-d" class="section">
+  <section id="section-d" class="section" aria-labelledby="heading-d">
     <div class="container">
-      <h2>D. OT in the MPC Ecosystem</h2>
+      <h2 id="heading-d">D. OT in the MPC Ecosystem</h2>
 
       <div class="subsection">
         <h3>D1. OT Extension (IKNP 2003)</h3>
@@ -402,7 +404,7 @@ async function onSenderInit(): Promise<void> {
   $('#demo-channel').innerHTML = '';
   $('#sender-output').innerHTML = '';
   $('#receiver-output').innerHTML = '';
-  $('#privacy-audit').style.display = 'none';
+  $('#privacy-audit').hidden = true;
 
   const sender = senderInit();
   currentSender = sender;
@@ -491,15 +493,15 @@ async function onReceiverChoose(): Promise<void> {
     <div class="decrypted-msg">
       ✅ <strong>Decrypted M<sub>${b}</sub>:</strong> ${escapeHtml(decrypted)}
     </div>
-    <div class="redacted-container">
-      <div class="redacted-content">${bytesToHex(unchosen.ciphertext)}</div>
+    <div class="redacted-container" role="img" aria-label="Unchosen message — encrypted and hidden, receiver cannot decrypt">
+      <div class="redacted-content" aria-hidden="true">${bytesToHex(unchosen.ciphertext)}</div>
       <div class="redacted-label">🔒 Hidden — receiver cannot decrypt</div>
     </div>
     ${otherResult !== null ? '<p style="color:var(--warning)">⚠ Unexpected: unchosen message was decryptable!</p>' : ''}`;
 
   // Privacy audit
   const audit = $('#privacy-audit');
-  audit.style.display = '';
+  audit.hidden = false;
   $('#sender-sees').innerHTML =
     `Sender sees <code>B = ${truncHex(receiver.BHex, 32)}</code>. Cannot determine if b=0 or b=1.`;
 
