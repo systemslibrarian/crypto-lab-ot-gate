@@ -399,12 +399,19 @@ function addChannelMsg(label: string, hex: string): void {
 }
 
 async function onSenderInit(): Promise<void> {
+  // Disable buttons during async work to prevent race conditions
+  const senderBtn = $('#btn-sender-init') as HTMLButtonElement;
+  const receiverBtn = $('#btn-receiver-choose') as HTMLButtonElement;
+  senderBtn.disabled = true;
+  receiverBtn.disabled = true;
+
   // Reset state
   currentSender = null;
   $('#demo-channel').innerHTML = '';
   $('#sender-output').innerHTML = '';
   $('#receiver-output').innerHTML = '';
   $('#privacy-audit').hidden = true;
+  senderBtn.textContent = 'Initialize Sender';
 
   const sender = senderInit();
   currentSender = sender;
@@ -423,12 +430,19 @@ async function onSenderInit(): Promise<void> {
   await delay(100);
   addChannelMsg('A → Receiver', sender.AHex);
 
-  // Enable receiver button
-  ($('#btn-receiver-choose') as HTMLButtonElement).disabled = false;
+  // Re-enable buttons
+  senderBtn.disabled = false;
+  receiverBtn.disabled = false;
 }
 
 async function onReceiverChoose(): Promise<void> {
   if (!currentSender) return;
+
+  // Disable buttons during async work to prevent race conditions
+  const senderBtn = $('#btn-sender-init') as HTMLButtonElement;
+  const receiverBtn = $('#btn-receiver-choose') as HTMLButtonElement;
+  senderBtn.disabled = true;
+  receiverBtn.disabled = true;
 
   const choiceEl = document.querySelector<HTMLInputElement>('input[name="choice"]:checked');
   const b = (choiceEl ? Number(choiceEl.value) : 0) as 0 | 1;
@@ -505,9 +519,9 @@ async function onReceiverChoose(): Promise<void> {
   $('#sender-sees').innerHTML =
     `Sender sees <code>B = ${truncHex(receiver.BHex, 32)}</code>. Cannot determine if b=0 or b=1.`;
 
-  // Disable buttons to indicate completion
-  ($('#btn-sender-init') as HTMLButtonElement).textContent = 'Reset & Re-initialize';
-  ($('#btn-receiver-choose') as HTMLButtonElement).disabled = true;
+  // Re-enable sender button for reset, keep receiver disabled until next init
+  senderBtn.textContent = 'Reset & Re-initialize';
+  senderBtn.disabled = false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
