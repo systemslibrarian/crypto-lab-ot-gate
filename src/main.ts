@@ -62,7 +62,7 @@ function header(): string {
   <header class="site-header" role="banner">
     <div class="container header-inner">
       <div>
-        <h1>🔐 OT Gate</h1>
+        <h1><span aria-hidden="true">🔐 </span>OT Gate</h1>
         <p class="subtitle">Oblivious Transfer — the foundation of secure two-party computation</p>
       </div>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme"></button>
@@ -133,7 +133,7 @@ function sectionA(): string {
         <div class="table-wrapper">
           <table>
             <thead>
-              <tr><th>Variant</th><th>Description</th><th>Use Case</th></tr>
+              <tr><th scope="col">Variant</th><th scope="col">Description</th><th scope="col">Use Case</th></tr>
             </thead>
             <tbody>
               <tr><td>1‑of‑2 OT</td><td>Receiver gets 1 of 2 messages</td><td>Foundational primitive</td></tr>
@@ -202,41 +202,59 @@ function sectionB(): string {
       <div class="subsection">
         <h3>B2. Live OT Demo</h3>
 
+        <!-- Live progress stepper (decorative for AT — narration handled by #sr-status) -->
+        <ol class="ot-steps" aria-hidden="true">
+          <li class="ot-step" data-step="1"><span class="ot-step-num">1</span> Sender setup</li>
+          <li class="ot-step" data-step="2"><span class="ot-step-num">2</span> Receiver choice</li>
+          <li class="ot-step" data-step="3"><span class="ot-step-num">3</span> Encrypt</li>
+          <li class="ot-step" data-step="4"><span class="ot-step-num">4</span> Decrypt</li>
+        </ol>
+
+        <p id="demo-status" class="demo-status" aria-hidden="true">
+          Press <strong>Initialize Sender</strong> to begin the protocol.
+        </p>
+
+        <p id="demo-error" class="demo-error" role="alert" hidden></p>
+
         <div class="ot-demo">
           <!-- Sender panel -->
           <div class="demo-sender">
             <div class="panel-label sender">Sender</div>
 
             <label for="m0-input">Message M<sub>0</sub></label>
-            <textarea id="m0-input" rows="2">The treasure is buried under the oak tree</textarea>
+            <textarea id="m0-input" rows="2" maxlength="2000" required>The treasure is buried under the oak tree</textarea>
 
             <label for="m1-input">Message M<sub>1</sub></label>
-            <textarea id="m1-input" rows="2">Meet at the old lighthouse at midnight</textarea>
+            <textarea id="m1-input" rows="2" maxlength="2000" required>Meet at the old lighthouse at midnight</textarea>
 
             <button id="btn-sender-init" class="btn btn-sender" type="button">Initialize Sender</button>
 
-            <div id="sender-output" aria-live="polite"></div>
+            <div id="sender-output"></div>
           </div>
 
           <!-- Channel -->
-          <div class="demo-channel" id="demo-channel" aria-live="polite" aria-label="Protocol messages exchanged between sender and receiver"></div>
+          <div class="demo-channel" id="demo-channel" role="group" aria-label="Protocol messages exchanged between sender and receiver"></div>
 
           <!-- Receiver panel -->
           <div class="demo-receiver">
             <div class="panel-label receiver">Receiver</div>
 
-            <label>Choice bit <em>b</em></label>
-            <fieldset class="radio-group">
-              <legend class="sr-only">Select which message to receive</legend>
+            <fieldset class="radio-group" aria-labelledby="choice-legend">
+              <legend id="choice-legend" class="sr-only">Select which message to receive</legend>
+              <div class="fake-legend" aria-hidden="true">Choice bit <em>b</em></div>
               <label for="choice-0"><input type="radio" id="choice-0" name="choice" value="0" checked> I want M<sub>0</sub></label>
               <label for="choice-1"><input type="radio" id="choice-1" name="choice" value="1"> I want M<sub>1</sub></label>
             </fieldset>
 
             <button id="btn-receiver-choose" class="btn btn-receiver" type="button" disabled>Make Selection</button>
 
-            <div id="receiver-output" aria-live="polite"></div>
+            <div id="receiver-output"></div>
           </div>
         </div>
+
+        <!-- Concise, screen-reader-only narration of each protocol step.
+             Keeps AT users from having raw hex read out character by character. -->
+        <div id="sr-status" class="sr-only" role="status" aria-live="polite"></div>
 
         <!-- Privacy audit -->
         <div id="privacy-audit" hidden>
@@ -277,10 +295,12 @@ function sectionC(): string {
 
       <div class="subsection">
         <h3>C2. DDH Hardness Visualizer</h3>
-        <p>Below are three Ed25519 points. Two are random (r·G) and one is of the
-           form A&nbsp;+&nbsp;r·G (the b=1 case). Can you tell which is which?</p>
+        <p>Three Ed25519 points are generated. Two are random (r·G) and one is of
+           the form A&nbsp;+&nbsp;r·G (the b=1 case). Try to pick out the odd one —
+           if you can't beat a 1-in-3 guess, that's the DDH assumption protecting
+           the receiver's choice.</p>
         <button id="btn-ddh" class="btn" type="button">Generate Points</button>
-        <div id="ddh-results" aria-live="polite"></div>
+        <div id="ddh-results"></div>
       </div>
 
       <div class="subsection">
@@ -318,7 +338,7 @@ function sectionD(): string {
         <div class="table-wrapper">
           <table>
             <thead>
-              <tr><th>Method</th><th>OTs Needed</th><th>Time per OT</th><th>Total (1 M OTs)</th></tr>
+              <tr><th scope="col">Method</th><th scope="col">OTs Needed</th><th scope="col">Time per OT</th><th scope="col">Total (1 M OTs)</th></tr>
             </thead>
             <tbody>
               <tr><td>Base OT (X25519)</td><td>1 M</td><td>~2 ms</td><td>~33 minutes</td></tr>
@@ -390,18 +410,169 @@ function footer(): string {
 
 let currentSender: SenderState | null = null;
 
+// Push a short, human-readable sentence to the screen-reader status region.
+// Hex values are visual reference only and are kept out of AT narration.
+function announce(msg: string): void {
+  $('#sr-status').textContent = msg;
+}
+
+// Update the visible status line AND the screen-reader live region together.
+function narrate(msg: string, done = false): void {
+  const status = $('#demo-status');
+  status.textContent = msg;
+  status.classList.toggle('complete', done);
+  announce(msg);
+}
+
+// Drive the visual progress stepper. `active` is the in-flight step (0 = none),
+// `done` marks every step up to and including that number as complete.
+function setSteps(active: number, done: number): void {
+  document.querySelectorAll<HTMLElement>('.ot-step').forEach((el) => {
+    const n = Number(el.dataset.step);
+    const isDone = n <= done;
+    el.classList.toggle('done', isDone);
+    el.classList.toggle('active', n === active);
+    const num = el.querySelector('.ot-step-num');
+    if (num) num.textContent = isDone ? '✓' : String(n);
+  });
+}
+
+// Glow the panel whose turn it is, so the eye follows the protocol.
+function highlightPanel(which: 'sender' | 'receiver' | null): void {
+  document.querySelector('.demo-sender')?.classList.toggle('is-active', which === 'sender');
+  document.querySelector('.demo-receiver')?.classList.toggle('is-active', which === 'receiver');
+}
+
+// Strip tags so an HTML label can be reused in a plain-text aria-label.
+function plain(s: string): string {
+  return s.replace(/<[^>]*>/g, '');
+}
+
+// A labelled hex value with a copy button. `display` shows a shortened form
+// while the full value is what actually gets copied.
+function hexBlock(
+  label: string,
+  value: string,
+  opts: { private?: boolean; display?: string } = {},
+): string {
+  const labelCls = opts.private ? 'hex-label private' : 'hex-label';
+  const shown = opts.display ?? value;
+  return `
+    <div class="hex-block">
+      <div class="hex-block-head">
+        <span class="${labelCls}">${label}</span>
+        <button class="copy-btn" type="button" data-copy="${value}" aria-label="Copy ${plain(label)} value">Copy</button>
+      </div>
+      <span class="hex-value" aria-hidden="true">${shown}</span>
+    </div>`;
+}
+
+// One delegated handler for every copy button, current or future.
+function setupCopyButtons(): void {
+  $('#app').addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.copy-btn');
+    if (!btn) return;
+    const value = btn.dataset.copy ?? '';
+    void navigator.clipboard
+      ?.writeText(value)
+      .then(() => {
+        const label = btn.getAttribute('aria-label') ?? 'Copy';
+        btn.textContent = 'Copied!';
+        btn.setAttribute('aria-label', 'Copied');
+        btn.classList.add('copied');
+        window.setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.setAttribute('aria-label', label);
+          btn.classList.remove('copied');
+        }, 1200);
+      })
+      .catch(() => {
+        /* clipboard blocked (insecure context / permissions) — no-op */
+      });
+  });
+}
+
 function addChannelMsg(label: string, hex: string): void {
   const ch = $('#demo-channel');
   const div = document.createElement('div');
   div.className = 'channel-msg';
-  div.innerHTML = `<span class="direction">${label}</span><span class="payload">${truncHex(hex, 48)}</span>`;
+  // Payload hex is decorative for AT; the direction label carries the meaning.
+  div.innerHTML = `<span class="direction">${label}</span><span class="payload" aria-hidden="true">${truncHex(hex, 48)}</span>`;
   ch.appendChild(div);
 }
 
+function showError(msg: string): void {
+  const el = $('#demo-error');
+  el.textContent = msg;
+  el.hidden = false;
+}
+
+function clearError(): void {
+  const el = $('#demo-error');
+  el.textContent = '';
+  el.hidden = true;
+  for (const id of ['m0-input', 'm1-input']) {
+    document.getElementById(id)?.removeAttribute('aria-invalid');
+  }
+}
+
+// Validate both messages are present. On failure, flags the field, shows an
+// alert, and returns the offending textarea so the caller can focus it.
+function validateMessages(): {
+  ok: boolean;
+  m0: string;
+  m1: string;
+  focus?: HTMLTextAreaElement;
+} {
+  const m0El = document.getElementById('m0-input') as HTMLTextAreaElement;
+  const m1El = document.getElementById('m1-input') as HTMLTextAreaElement;
+  const m0 = m0El.value.trim();
+  const m1 = m1El.value.trim();
+  m0El.removeAttribute('aria-invalid');
+  m1El.removeAttribute('aria-invalid');
+
+  if (m0 === '') {
+    m0El.setAttribute('aria-invalid', 'true');
+    showError('Message M₀ can’t be empty — enter some text for the sender’s first message.');
+    return { ok: false, m0, m1, focus: m0El };
+  }
+  if (m1 === '') {
+    m1El.setAttribute('aria-invalid', 'true');
+    showError('Message M₁ can’t be empty — enter some text for the sender’s second message.');
+    return { ok: false, m0, m1, focus: m1El };
+  }
+  return { ok: true, m0, m1 };
+}
+
+// Common recovery path if any crypto/DOM step throws mid-protocol.
+function handleDemoError(
+  err: unknown,
+  senderBtn: HTMLButtonElement,
+  receiverBtn: HTMLButtonElement,
+): void {
+  console.error('OT demo error:', err);
+  setSteps(0, 0);
+  highlightPanel(null);
+  showError('Something went wrong running the protocol in your browser. Press “Reset & Re-initialize” and try again.');
+  narrate('The protocol hit an error and stopped. Press the reset button to start over.');
+  senderBtn.textContent = 'Reset & Re-initialize';
+  senderBtn.disabled = false;
+  receiverBtn.disabled = true;
+}
+
 async function onSenderInit(): Promise<void> {
-  // Disable buttons during async work to prevent race conditions
   const senderBtn = $('#btn-sender-init') as HTMLButtonElement;
   const receiverBtn = $('#btn-receiver-choose') as HTMLButtonElement;
+
+  // Guard: both messages must be present before the sender can commit them.
+  const valid = validateMessages();
+  if (!valid.ok) {
+    valid.focus?.focus();
+    return;
+  }
+  clearError();
+
+  // Disable buttons during async work to prevent race conditions
   senderBtn.disabled = true;
   receiverBtn.disabled = true;
 
@@ -413,190 +584,266 @@ async function onSenderInit(): Promise<void> {
   $('#privacy-audit').hidden = true;
   senderBtn.textContent = 'Initialize Sender';
 
-  const sender = senderInit();
-  currentSender = sender;
+  try {
+    setSteps(1, 0);
+    highlightPanel('sender');
+    narrate('Step 1 — the sender is generating a private scalar a and the public point A = aG…');
 
-  // Display sender output
-  $('#sender-output').innerHTML = `
-    <div class="hex-block">
-      <span class="hex-label private">a — sender private scalar (never transmitted)</span>
-      ${bigintToHex(sender.a)}
-    </div>
-    <div class="hex-block">
-      <span class="hex-label">A = aG (sent to receiver)</span>
-      ${sender.AHex}
-    </div>`;
+    await delay(150);
 
-  await delay(100);
-  addChannelMsg('A → Receiver', sender.AHex);
+    const sender = senderInit();
+    currentSender = sender;
 
-  // Re-enable buttons
-  senderBtn.disabled = false;
-  receiverBtn.disabled = false;
+    // Display sender output
+    $('#sender-output').innerHTML =
+      hexBlock('a — sender private scalar (never transmitted)', bigintToHex(sender.a), {
+        private: true,
+      }) + hexBlock('A = aG (sent to receiver)', sender.AHex);
+
+    await delay(100);
+    addChannelMsg('A → Receiver', sender.AHex);
+
+    setSteps(2, 1);
+    highlightPanel('receiver');
+    narrate('Sender ready. Now pick which message you want (b = 0 or b = 1) and press “Make Selection”.');
+
+    // Re-enable buttons
+    senderBtn.disabled = false;
+    receiverBtn.disabled = false;
+  } catch (err) {
+    handleDemoError(err, senderBtn, receiverBtn);
+  }
 }
 
 async function onReceiverChoose(): Promise<void> {
   if (!currentSender) return;
 
-  // Disable buttons during async work to prevent race conditions
   const senderBtn = $('#btn-sender-init') as HTMLButtonElement;
   const receiverBtn = $('#btn-receiver-choose') as HTMLButtonElement;
+
+  // Messages can be edited after init — re-validate before encrypting.
+  const valid = validateMessages();
+  if (!valid.ok) {
+    valid.focus?.focus();
+    return;
+  }
+  clearError();
+
+  // Disable buttons during async work to prevent race conditions
   senderBtn.disabled = true;
   receiverBtn.disabled = true;
 
   const choiceEl = document.querySelector<HTMLInputElement>('input[name="choice"]:checked');
   const b = (choiceEl ? Number(choiceEl.value) : 0) as 0 | 1;
 
-  const receiver = receiverChoose(currentSender.ABytes, b);
-  // Display receiver output
-  $('#receiver-output').innerHTML = `
-    <div class="hex-block">
-      <span class="hex-label private">r — receiver private scalar (never transmitted)</span>
-      ${bigintToHex(receiver.r)}
-    </div>
-    <div class="hex-block">
-      <span class="hex-label">B (sent to sender) — choice b=${b}</span>
-      ${receiver.BHex}
-    </div>`;
+  try {
+    // ── Step 2 — receiver computes B ─────────────────────────────────
+    setSteps(2, 1);
+    highlightPanel('receiver');
+    narrate(`Step 2 — the receiver picks b = ${b}, generates scalar r, and computes B…`);
 
-  await delay(200);
-  addChannelMsg('B → Sender', receiver.BHex);
+    const receiver = receiverChoose(currentSender.ABytes, b);
+    // Display receiver output
+    $('#receiver-output').innerHTML =
+      hexBlock('r — receiver private scalar (never transmitted)', bigintToHex(receiver.r), {
+        private: true,
+      }) + hexBlock(`B (sent to sender) — choice b=${b}`, receiver.BHex);
 
-  // Sender encrypts
-  await delay(300);
+    await delay(250);
+    addChannelMsg('B → Sender', receiver.BHex);
 
-  const m0 = (document.getElementById('m0-input') as HTMLTextAreaElement).value;
-  const m1 = (document.getElementById('m1-input') as HTMLTextAreaElement).value;
+    // ── Step 3 — sender encrypts both messages ───────────────────────
+    setSteps(3, 2);
+    highlightPanel('sender');
+    narrate('Step 3 — the sender derives k₀ and k₁ and encrypts both messages…');
+    await delay(350);
 
-  const enc = await senderEncrypt(currentSender, receiver.BBytes, m0, m1);
-  // Show sender keys and ciphertexts
-  $('#sender-output').innerHTML += `
-    <div class="hex-block">
-      <span class="hex-label">k<sub>0</sub> = H(a·B)</span>
-      ${enc.k0Hex}
-    </div>
-    <div class="hex-block">
-      <span class="hex-label">k<sub>1</sub> = H(a·(B−A))</span>
-      ${enc.k1Hex}
-    </div>
-    <div class="hex-block">
-      <span class="hex-label">E<sub>0</sub> (encrypted M<sub>0</sub>)</span>
-      ${truncHex(bytesToHex(enc.e0.ciphertext), 64)}
-    </div>
-    <div class="hex-block">
-      <span class="hex-label">E<sub>1</sub> (encrypted M<sub>1</sub>)</span>
-      ${truncHex(bytesToHex(enc.e1.ciphertext), 64)}
-    </div>`;
+    const enc = await senderEncrypt(currentSender, receiver.BBytes, valid.m0, valid.m1);
+    const e0Hex = bytesToHex(enc.e0.ciphertext);
+    const e1Hex = bytesToHex(enc.e1.ciphertext);
+    // Show sender keys and ciphertexts
+    $('#sender-output').innerHTML +=
+      hexBlock('k<sub>0</sub> = H(a·B)', enc.k0Hex) +
+      hexBlock('k<sub>1</sub> = H(a·(B−A))', enc.k1Hex) +
+      hexBlock('E<sub>0</sub> (encrypted M<sub>0</sub>)', e0Hex, { display: truncHex(e0Hex, 64) }) +
+      hexBlock('E<sub>1</sub> (encrypted M<sub>1</sub>)', e1Hex, { display: truncHex(e1Hex, 64) });
 
-  addChannelMsg('(E₀, E₁) → Receiver', truncHex(bytesToHex(enc.e0.ciphertext), 20) + ' | ' + truncHex(bytesToHex(enc.e1.ciphertext), 20));
+    addChannelMsg('(E₀, E₁) → Receiver', truncHex(e0Hex, 20) + ' | ' + truncHex(e1Hex, 20));
 
-  // Receiver decrypts
-  await delay(300);
+    // ── Step 4 — receiver decrypts the chosen ciphertext ─────────────
+    setSteps(4, 3);
+    highlightPanel('receiver');
+    narrate('Step 4 — the receiver derives k_b = H(r·A) and decrypts the chosen message…');
+    await delay(350);
 
-  const chosen = b === 0 ? enc.e0 : enc.e1;
-  const unchosen = b === 0 ? enc.e1 : enc.e0;
+    const chosen = b === 0 ? enc.e0 : enc.e1;
+    const unchosen = b === 0 ? enc.e1 : enc.e0;
 
-  const decrypted = await receiverDecrypt(receiver.keyBytes, chosen);
-  const otherResult = await tryDecrypt(receiver.keyBytes, unchosen);
+    const decrypted = await receiverDecrypt(receiver.keyBytes, chosen);
+    const otherResult = await tryDecrypt(receiver.keyBytes, unchosen);
 
-  $('#receiver-output').innerHTML += `
-    <div class="hex-block">
-      <span class="hex-label">k<sub>b</sub> = H(r·A) — receiver's derived key</span>
-      ${receiver.keyHex}
-    </div>
-    <div class="decrypted-msg">
-      ✅ <strong>Decrypted M<sub>${b}</sub>:</strong> ${escapeHtml(decrypted)}
-    </div>
-    <div class="redacted-container" role="img" aria-label="Unchosen message — encrypted and hidden, receiver cannot decrypt">
-      <div class="redacted-content" aria-hidden="true">${bytesToHex(unchosen.ciphertext)}</div>
-      <div class="redacted-label">🔒 Hidden — receiver cannot decrypt</div>
-    </div>
-    ${otherResult !== null ? '<p style="color:var(--warning)">⚠ Unexpected: unchosen message was decryptable!</p>' : ''}`;
+    $('#receiver-output').innerHTML +=
+      hexBlock("k<sub>b</sub> = H(r·A) — receiver's derived key", receiver.keyHex) +
+      `<div class="decrypted-msg">
+        <span aria-hidden="true">✅ </span><strong>Decrypted M<sub>${b}</sub>:</strong> ${escapeHtml(decrypted)}
+      </div>
+      <div class="redacted-container" role="img" aria-label="Unchosen message — encrypted and hidden, receiver cannot decrypt">
+        <div class="redacted-content" aria-hidden="true">${bytesToHex(unchosen.ciphertext)}</div>
+        <div class="redacted-label"><span aria-hidden="true">🔒 </span>Hidden — receiver cannot decrypt</div>
+      </div>
+      ${otherResult !== null ? '<p style="color:var(--warning)">⚠ Unexpected: unchosen message was decryptable!</p>' : ''}`;
 
-  // Privacy audit
-  const audit = $('#privacy-audit');
-  audit.hidden = false;
-  $('#sender-sees').innerHTML =
-    `Sender sees <code>B = ${truncHex(receiver.BHex, 32)}</code>. Cannot determine if b=0 or b=1.`;
+    // ── Done ─────────────────────────────────────────────────────────
+    setSteps(0, 4);
+    highlightPanel(null);
+    narrate(
+      `Done — the receiver read M${b} (“${decrypted}”). The other message stayed locked, ` +
+        `and the sender never learned which one you chose.`,
+      true,
+    );
 
-  // Re-enable sender button for reset, keep receiver disabled until next init
-  senderBtn.textContent = 'Reset & Re-initialize';
-  senderBtn.disabled = false;
+    // Privacy audit
+    const audit = $('#privacy-audit');
+    audit.hidden = false;
+    $('#sender-sees').innerHTML =
+      `Sender sees <code>B = ${truncHex(receiver.BHex, 32)}</code>. Cannot determine if b=0 or b=1.`;
+
+    // Re-enable sender button for reset, keep receiver disabled until next init
+    senderBtn.textContent = 'Reset & Re-initialize';
+    senderBtn.disabled = false;
+  } catch (err) {
+    handleDemoError(err, senderBtn, receiverBtn);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Section C1 — Correctness check
 // ═══════════════════════════════════════════════════════════════════════
 
+function correctnessRow(
+  b: 0 | 1,
+  expected: string,
+  decrypted: string,
+  otherFailed: boolean,
+): string {
+  const decryptOk = decrypted === expected;
+  const ok = decryptOk && otherFailed;
+  return `
+    <div class="result-row ${ok ? 'pass' : 'fail'}">
+      <span class="result-icon" aria-hidden="true">${ok ? '✅' : '❌'}</span>
+      <div>
+        <div class="result-head"><strong>Choice b=${b}</strong> — receiver decrypted "<code>${escapeHtml(decrypted)}</code>"</div>
+        <ul class="result-checks">
+          <li class="${decryptOk ? 'ok' : 'bad'}">${decryptOk ? 'Chosen message M' + b + ' decrypted correctly' : 'Decryption did not match M' + b}</li>
+          <li class="${otherFailed ? 'ok' : 'bad'}">${otherFailed ? 'Unchosen message could not be decrypted' : 'Unchosen message was unexpectedly decryptable'}</li>
+        </ul>
+      </div>
+    </div>`;
+}
+
 async function onCorrectnessCheck(): Promise<void> {
   const btn = $('#btn-correctness') as HTMLButtonElement;
   const out = $('#correctness-results');
   btn.disabled = true;
-  out.innerHTML = '<span class="spinner"></span> Running protocol for both choices…';
+  out.innerHTML =
+    '<p class="check-status"><span class="spinner" aria-hidden="true"></span> Running the full protocol for b=0 and b=1…</p>';
 
   const m0 = 'Correctness test message ZERO';
   const m1 = 'Correctness test message ONE';
 
-  const r0 = await runFullOT(m0, m1, 0);
-  const r1 = await runFullOT(m0, m1, 1);
+  try {
+    const r0 = await runFullOT(m0, m1, 0);
+    await delay(300);
+    const r1 = await runFullOT(m0, m1, 1);
 
-  const ok0 = r0.decrypted === m0 && r0.otherFailed;
-  const ok1 = r1.decrypted === m1 && r1.otherFailed;
+    const ok0 = r0.decrypted === m0 && r0.otherFailed;
+    const ok1 = r1.decrypted === m1 && r1.otherFailed;
+    const allOk = ok0 && ok1;
 
-  out.innerHTML = `
-    <div class="correctness-results">
-      <div class="result-row">
-        <span class="result-icon">${ok0 ? '✅' : '❌'}</span>
-        <span><strong>b=0:</strong> receiver decrypted
-          "<code>${escapeHtml(r0.decrypted)}</code>"
-          ${r0.otherFailed ? '— unchosen message undecryptable ✓' : '— ⚠ unchosen was decryptable!'}</span>
+    out.innerHTML = `
+      <div class="check-verdict ${allOk ? 'ok' : 'fail'}">
+        <span class="result-icon" aria-hidden="true">${allOk ? '✅' : '❌'}</span>
+        <span>${
+          allOk
+            ? 'All checks passed — each choice decrypts to the right message, and the other message stays locked.'
+            : 'A check failed — see the details below.'
+        }</span>
       </div>
-      <div class="result-row">
-        <span class="result-icon">${ok1 ? '✅' : '❌'}</span>
-        <span><strong>b=1:</strong> receiver decrypted
-          "<code>${escapeHtml(r1.decrypted)}</code>"
-          ${r1.otherFailed ? '— unchosen message undecryptable ✓' : '— ⚠ unchosen was decryptable!'}</span>
-      </div>
-    </div>`;
-
-  btn.disabled = false;
+      <div class="correctness-results">
+        ${correctnessRow(0, m0, r0.decrypted, r0.otherFailed)}
+        ${correctnessRow(1, m1, r1.decrypted, r1.otherFailed)}
+      </div>`;
+  } catch (err) {
+    console.error('Correctness check error:', err);
+    out.innerHTML = `
+      <div class="check-verdict fail">
+        <span class="result-icon" aria-hidden="true">❌</span>
+        <span>The correctness check couldn’t run in your browser. Please try again.</span>
+      </div>`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Section C2 — DDH visualizer
 // ═══════════════════════════════════════════════════════════════════════
 
+// Index of the A+r·G point in the currently displayed DDH challenge, or null
+// once the user has already guessed / before any points exist.
+let ddhAnswer: number | null = null;
+
 function onDDHGenerate(): void {
   const out = $('#ddh-results');
   const { points, b1Index, AHex } = generateDDHPoints();
+  ddhAnswer = b1Index;
+
+  announce(
+    'Generated three Curve25519 points. Two are random r·G and one is A + r·G. ' +
+      'Choose the point you think is A + r·G. Under the DDH assumption they are indistinguishable, so it is a one-in-three guess.',
+  );
+
+  $('#btn-ddh').textContent = 'Generate New Points';
 
   out.innerHTML = `
-    <div class="hex-block" style="margin-bottom:1rem">
-      <span class="hex-label">A (sender's public point for this example)</span>
-      ${AHex}
-    </div>
-    <div class="ddh-points">
+    ${hexBlock("A (sender's public point for this example)", AHex)}
+    <p class="ddh-prompt">Which point is <strong>A + r·G</strong> (the b=1 case)? Take your best guess:</p>
+    <div class="ddh-points" role="group" aria-label="Three candidate points — choose which one is A plus r·G">
       ${points
         .map(
           (p, i) => `
-        <div class="ddh-point">
-          <div class="ddh-point-label">Point ${i + 1}</div>
-          <div class="ddh-point-hex">${p}</div>
-        </div>`,
+        <button class="ddh-point" type="button" data-index="${i}" aria-label="Guess that point ${i + 1} is A plus r·G">
+          <span class="ddh-point-label">Point ${i + 1}</span>
+          <span class="ddh-point-hex">${p}</span>
+        </button>`,
         )
         .join('')}
     </div>
-    <p class="note">Under the Decisional Diffie-Hellman (DDH) assumption on
-       Curve25519, these three points are computationally indistinguishable. The
-       sender sees only B — a single point — and cannot determine whether it
-       equals rG (b=0) or A+rG (b=1).</p>
-    <details style="margin-top:0.75rem">
-      <summary style="cursor:pointer;color:var(--text-muted);font-size:0.9rem">
-        Reveal which point is the b=1 case
-      </summary>
-      <p style="margin-top:0.5rem">Point <strong>${b1Index + 1}</strong> is A + r·G
-         (the b=1 case). The other two are random r·G points.</p>
-    </details>`;
+    <div id="ddh-feedback" class="ddh-feedback" role="status" aria-live="polite"></div>`;
+}
+
+function onDDHGuess(idx: number): void {
+  if (ddhAnswer === null) return;
+  const answer = ddhAnswer;
+  ddhAnswer = null; // lock further guesses for this round
+  const correct = idx === answer;
+
+  document.querySelectorAll<HTMLButtonElement>('.ddh-point').forEach((btn) => {
+    const i = Number(btn.dataset.index);
+    btn.disabled = true;
+    btn.classList.add(i === answer ? 'is-b1' : 'is-random');
+    if (i === idx && !correct) btn.classList.add('is-wrong');
+    if (i === answer) {
+      const label = btn.querySelector('.ddh-point-label');
+      if (label) label.textContent = `Point ${i + 1} — A + r·G`;
+    }
+  });
+
+  const fb = $('#ddh-feedback');
+  fb.className = 'ddh-feedback ' + (correct ? 'ok' : 'fail');
+  fb.innerHTML = correct
+    ? `<strong>Correct — Point ${answer + 1}</strong> was A + r·G. But you had no real way to know: under DDH the three points are computationally indistinguishable, so you'd be right only about 1 time in 3. That indistinguishability is exactly what stops the sender from learning the receiver's choice b.`
+    : `<strong>Not quite — Point ${answer + 1}</strong> was A + r·G. Don't worry: under DDH the points are computationally indistinguishable, so no strategy beats a 1-in-3 guess. That's precisely why the sender can't tell B = rG (b=0) from B = A + rG (b=1).`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -619,6 +866,7 @@ function mount(): void {
     header() + '<main>' + sectionA() + sectionB() + sectionC() + sectionD() + '</main>' + footer();
 
   setupThemeToggle();
+  setupCopyButtons();
 
   // B2 demo events
   $('#btn-sender-init').addEventListener('click', () => void onSenderInit());
@@ -629,6 +877,10 @@ function mount(): void {
 
   // C2 DDH
   $('#btn-ddh').addEventListener('click', onDDHGenerate);
+  $('#ddh-results').addEventListener('click', (e) => {
+    const pt = (e.target as HTMLElement).closest<HTMLButtonElement>('.ddh-point');
+    if (pt && !pt.disabled) onDDHGuess(Number(pt.dataset.index));
+  });
 }
 
 mount();
