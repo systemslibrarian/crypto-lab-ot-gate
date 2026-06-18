@@ -1,1 +1,0 @@
-import { ed25519 } from '@noble/curves/ed25519.js'; const G = ed25519.Point.BASE; try { G.subtract(G).multiply(5n).toBytes(); console.log('Zero point handled'); } catch (e) { console.error('Zero point error:', e); }
