@@ -399,6 +399,11 @@ function footer(): string {
   return `
   <footer class="site-footer">
     <div class="container">
+      <p>Related demos:
+        <a href="https://systemslibrarian.github.io/crypto-lab-garbled-gate/" target="_blank" rel="noopener">crypto-lab-garbled-gate</a> ·
+        <a href="https://systemslibrarian.github.io/crypto-lab-silent-tally/" target="_blank" rel="noopener">crypto-lab-silent-tally</a> ·
+        <a href="https://systemslibrarian.github.io/crypto-lab-frost-threshold/" target="_blank" rel="noopener">crypto-lab-frost-threshold</a> ·
+        <a href="https://systemslibrarian.github.io/crypto-lab-oblivious-shelf/" target="_blank" rel="noopener">crypto-lab-oblivious-shelf</a></p>
       <p>Part of the <a href="https://systemslibrarian.github.io/crypto-lab/" target="_blank" rel="noopener">crypto-lab</a> portfolio</p>
     </div>
   </footer>`;
