@@ -103,7 +103,7 @@ function sectionA(): string {
             <div class="ot-visual-label" style="color:var(--channel-color)">Channel</div>
           </div>
           <div class="ot-visual-receiver">
-            <div class="ot-visual-label" style="color:var(--receiver-color)">Receiver</div>
+            <div class="ot-visual-label" style="color:var(--receiver-text)">Receiver</div>
             <div class="ot-visual-choice">b = 0</div>
             <div class="ot-visual-msg unlocked">M<sub>0</sub> ✓</div>
             <div class="ot-visual-msg hidden-msg">🔒 Hidden</div>
@@ -180,7 +180,7 @@ function sectionB(): string {
             <div class="flow-step">&nbsp;</div>
           </div>
           <div class="flow-col flow-receiver">
-            <div class="flow-header" style="color:var(--receiver-color)">Receiver</div>
+            <div class="flow-header" style="color:var(--receiver-text)">Receiver</div>
             <div class="flow-step">&nbsp;</div>
             <div class="flow-step">Generate scalar <em>r</em><br>b=0: B&nbsp;=&nbsp;rG<br>b=1: B&nbsp;=&nbsp;A+rG</div>
             <div class="flow-step">&nbsp;</div>

@@ -25,6 +25,11 @@
   --hidden: #ef4444;
   /* Brighter red reserved for red *text* on dark surfaces (WCAG AA) */
   --danger-text: #f87171;
+  /* Text-only tokens: on dark the bright hues already clear 4.5:1, so text
+     reuses the hue. Light theme overrides these to darker inks (below). */
+  --receiver-text: var(--receiver-color);
+  --success-text: var(--success);
+  --warning-text: var(--warning);
 }
 
 [data-theme='light'] {
@@ -46,6 +51,13 @@
   --warning: #ea580c;
   --hidden: #dc2626;
   --danger-text: #b91c1c;
+  /* Light-theme text inks: the receiver amber, success green, and warning
+     orange are bright accents that clear 4.5:1 only as borders/fills, not as
+     text on light surfaces — darken them for text use while keeping the bright
+     hue for swatches/borders. */
+  --receiver-text: #b45309;
+  --success-text: #036249;
+  --warning-text: #c2410c;
 }
 
 /* ── Reset & base ──────────────────────────────────────────────────── */
@@ -283,7 +295,7 @@ sub { font-size: 0.75em; }
 }
 
 .panel-label.sender { color: var(--sender-color); }
-.panel-label.receiver { color: var(--receiver-color); }
+.panel-label.receiver { color: var(--receiver-text); }
 .panel-label.channel { color: var(--channel-color); }
 
 /* ── OT visual (Section A1) ───────────────────────────────────────── */
@@ -346,7 +358,7 @@ sub { font-size: 0.75em; }
 
 .ot-visual-msg.unlocked {
   background: color-mix(in srgb, var(--success) 15%, transparent);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .ot-visual-msg.locked,
@@ -361,7 +373,7 @@ sub { font-size: 0.75em; }
 .ot-visual-choice {
   font-weight: 600;
   margin-bottom: 0.5rem;
-  color: var(--receiver-color);
+  color: var(--receiver-text);
 }
 
 /* ── Protocol flow diagram (Section B1) ────────────────────────────── */
@@ -397,7 +409,7 @@ sub { font-size: 0.75em; }
 .flow-step:last-child { border-bottom: none; }
 
 .flow-sender .flow-step { color: var(--sender-color); }
-.flow-receiver .flow-step { color: var(--receiver-color); }
+.flow-receiver .flow-step { color: var(--receiver-text); }
 
 .flow-channel .flow-step {
   justify-content: center;
@@ -452,7 +464,7 @@ sub { font-size: 0.75em; }
 }
 
 .ot-step.done {
-  color: var(--success);
+  color: var(--success-text);
   border-color: color-mix(in srgb, var(--success) 45%, var(--border));
 }
 
@@ -677,7 +689,7 @@ input[type='radio'] {
 
 .btn-receiver {
   border-color: var(--receiver-color);
-  color: var(--receiver-color);
+  color: var(--receiver-text);
 }
 .btn-receiver:hover:not(:disabled) {
   background: var(--receiver-surface);
@@ -707,7 +719,7 @@ input[type='radio'] {
   color: var(--text);
 }
 
-.hex-label.private { color: var(--warning); }
+.hex-label.private { color: var(--warning-text); }
 
 .hex-block-head {
   display: flex;
@@ -811,7 +823,7 @@ input[type='radio'] {
 
 .audit-box .audit-answer {
   font-size: 0.9rem;
-  color: var(--success);
+  color: var(--success-text);
 }
 
 /* ── Decrypted message ─────────────────────────────────────────────── */
@@ -822,7 +834,7 @@ input[type='radio'] {
   border-radius: 6px;
   padding: 0.75rem 1rem;
   margin: 0.5rem 0;
-  color: var(--success);
+  color: var(--success-text);
   font-size: 0.95rem;
 }
 
@@ -902,7 +914,7 @@ td { color: var(--text); }
   position: absolute;
   left: 0;
 }
-.result-checks li.ok { color: var(--success); }
+.result-checks li.ok { color: var(--success-text); }
 .result-checks li.ok::before { content: '✓'; }
 .result-checks li.bad { color: var(--danger-text); }
 .result-checks li.bad::before { content: '✗'; }
@@ -923,7 +935,7 @@ td { color: var(--text); }
 .check-verdict.ok {
   background: color-mix(in srgb, var(--success) 12%, var(--surface));
   border: 1px solid var(--success);
-  color: var(--success);
+  color: var(--success-text);
 }
 .check-verdict.fail {
   background: color-mix(in srgb, var(--hidden) 12%, var(--surface));
@@ -994,7 +1006,7 @@ td { color: var(--text); }
   color: var(--text-muted);
   margin-bottom: 0.25rem;
 }
-.ddh-point.is-b1 .ddh-point-label { color: var(--success); }
+.ddh-point.is-b1 .ddh-point-label { color: var(--success-text); }
 
 .ddh-point-hex {
   display: block;
@@ -1123,7 +1135,7 @@ td { color: var(--text); }
 
 .step-tag.receiver {
   background: color-mix(in srgb, var(--receiver-color) 15%, transparent);
-  color: var(--receiver-color);
+  color: var(--receiver-text);
 }
 
 /* ── Responsive ────────────────────────────────────────────────────── */
