@@ -24,7 +24,7 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npx tsc --noEmit
-      - run: npm test --if-present
+      - run: npm test
       - run: npm run build
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium

@@ -67,6 +67,25 @@ export function bigintToHex(n: bigint): string {
   return n.toString(16).padStart(64, '0');
 }
 
+/**
+ * Unbiased random integer in [0, n) using getRandomValues (rejection
+ * sampling). Keeps the demo's "randomness exclusively via getRandomValues"
+ * discipline — never Math.random() — even for a cosmetic shuffle.
+ */
+export function randomIndex(n: number): number {
+  if (n <= 0 || !Number.isInteger(n)) {
+    throw new RangeError('randomIndex needs a positive integer bound');
+  }
+  const limit = Math.floor(0x100000000 / n) * n; // largest multiple of n ≤ 2^32
+  const buf = new Uint32Array(1);
+  let x: number;
+  do {
+    crypto.getRandomValues(buf);
+    x = buf[0];
+  } while (x >= limit);
+  return x % n;
+}
+
 // ── AES-256-GCM (Web Crypto) ────────────────────────────────────────
 
 /** Copy Uint8Array into a fresh ArrayBuffer (TS6 strict typing) */
@@ -158,7 +177,9 @@ export async function senderEncrypt(
   m1: string,
 ): Promise<EncryptionResult> {
   const BPoint = Point.fromHex(bytesToHex(BBytes));
-  const APoint = G.multiply(sender.a);
+  // Reuse the public point A the sender already published (A = aG) rather
+  // than recomputing G.multiply(a); k1 = H(a·(B−A)) needs the same A.
+  const APoint = Point.fromHex(bytesToHex(sender.ABytes));
 
   // k0 = H(a · B)
   const k0 = sha256(BPoint.multiply(sender.a).toBytes());
@@ -237,8 +258,9 @@ export function generateDDHPoints(): {
     bytesToHex(APoint.add(G.multiply(r3)).toBytes()),
   ];
 
-  // Shuffle: place the b=1 point at a random index
-  const b1Index = Math.floor(Math.random() * 3);
+  // Shuffle: place the b=1 point at a random index (getRandomValues, not
+  // Math.random — this demo sources all randomness from the CSPRNG).
+  const b1Index = randomIndex(3);
   [pts[2], pts[b1Index]] = [pts[b1Index], pts[2]];
 
   return { points: pts, b1Index, AHex: bytesToHex(APoint.toBytes()) };

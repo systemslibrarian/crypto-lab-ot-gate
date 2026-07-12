@@ -35,6 +35,32 @@ Enter two messages as the sender and select your choice as the receiver. The dem
 - **EMP-toolkit:** open-source MPC research library with optimized IKNP OT extension, used in academic work on private machine learning and secure auctions.
 - **OpenMined PySyft:** uses OT-based protocols for federated learning with cryptographic privacy guarantees beyond differential privacy alone.
 
+## Testing
+
+The OT correctness and privacy claims are verified headlessly, not just by the
+in-app "correctness" button. `npm test` runs a Vitest suite (`src/ot.test.ts`)
+against the real protocol code in `src/ot.ts`:
+
+- **Correctness:** for both choice bits, the receiver recovers exactly M_b, over
+  a fixed check and 25 random sessions.
+- **Receiver privacy:** the receiver's key fails to decrypt M_{1-b} (AES-256-GCM
+  authentication rejects), and the receiver key equals the *chosen* sender key
+  but never the other.
+- **Key-derivation identity:** H(r·A) = H(a·B) when b=0 and H(a·(B−A)) when b=1,
+  recomputed independently from public transcript values plus the sender scalar.
+- **Sender privacy structure:** B(b=0) and B(b=1) are both valid, distinct curve
+  points and the sender's encryption never branches on b.
+- **DDH visualizer:** produces three distinct valid curve points and an unbiased
+  CSPRNG-selected index.
+
+```bash
+npm test          # Vitest unit/property tests (crypto correctness + privacy)
+npm run test:a11y # Playwright + axe-core WCAG A/AA gate (both themes)
+```
+
+CI runs `npm test` on every push (it is a required gate, not `--if-present`), so
+a regression that broke recovery of M_b or leaked M_{1-b} would fail the build.
+
 ## How to Run Locally
 
 ```bash
