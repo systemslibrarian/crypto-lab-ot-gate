@@ -58,16 +58,20 @@ function setupThemeToggle(): void {
 
 function header(): string {
   return `
-  <a href="#section-b" class="skip-link">Skip to interactive demo</a>
-  <header class="site-header" role="banner">
-    <div class="container header-inner">
-      <div>
-        <h1><span aria-hidden="true">🔐 </span>OT Gate</h1>
-        <p class="subtitle">Oblivious Transfer — the foundation of secure two-party computation</p>
+  <div class="container">
+    <header class="cl-hero">
+      <div class="cl-hero-main">
+        <h1 class="cl-hero-title">OT Gate</h1>
+        <p class="cl-hero-sub">1-of-2 Oblivious Transfer · Simplest OT (Chou–Orlandi) · Curve25519</p>
+        <p class="cl-hero-desc">Run the Chou–Orlandi OT protocol end to end — watch the sender and receiver exchange curve points so the receiver unlocks exactly one of two messages while neither side learns the other's secret.</p>
       </div>
-      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme"></button>
-    </div>
-  </header>`;
+      <aside class="cl-hero-why" aria-label="Why it matters">
+        <span class="cl-hero-why-label">WHY IT MATTERS</span>
+        <p class="cl-hero-why-text">Oblivious transfer is complete for secure two-party computation: with it alone you can build private set intersection, secure auctions, and password checks that leak nothing. Get OT right and the whole MPC stack stands on solid ground.</p>
+      </aside>
+    </header>
+  </div>
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme" hidden aria-hidden="true"></button>`;
 }
 
 // ── Section A ────────────────────────────────────────────────────────
@@ -868,7 +872,7 @@ function escapeHtml(s: string): string {
 function mount(): void {
   const app = $('#app');
   app.innerHTML =
-    header() + '<main>' + sectionA() + sectionB() + sectionC() + sectionD() + '</main>' + footer();
+    '<main>' + header() + sectionA() + sectionB() + sectionC() + sectionD() + '</main>' + footer();
 
   setupThemeToggle();
   setupCopyButtons();
