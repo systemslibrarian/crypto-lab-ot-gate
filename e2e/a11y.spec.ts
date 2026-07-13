@@ -51,6 +51,12 @@ async function runDemo(page: Page): Promise<void> {
 
   await page.locator('#btn-ddh').click();
   await expect(page.locator('#ddh-results .ddh-point').first()).toBeVisible();
+  // Guess the first point so the tally/scoreboard + feedback render.
+  await page.locator('#ddh-results .ddh-point').first().click();
+  await expect(page.locator('#ddh-feedback')).not.toBeEmpty();
+  // Run the 1000× computer simulation so its result region is scanned too.
+  await page.locator('#btn-ddh-auto').click();
+  await expect(page.locator('#ddh-auto .ddh-auto-result')).toBeVisible();
 }
 
 async function scan(page: Page): Promise<void> {

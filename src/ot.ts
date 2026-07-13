@@ -265,3 +265,87 @@ export function generateDDHPoints(): {
 
   return { points: pts, b1Index, AHex: bytesToHex(APoint.toBytes()) };
 }
+
+/**
+ * Simulate `rounds` independent DDH challenges and let a strategy that always
+ * guesses index 0 play each one. Because the A+rG point is placed at a uniformly
+ * random index by the CSPRNG shuffle, ANY fixed or adaptive strategy is right
+ * exactly 1/3 of the time — there is no signal to exploit. We run REAL point
+ * generation each round (not a coin flip) so the ~33% is an empirical property
+ * of the actual curve arithmetic, not a hardcoded number.
+ */
+export function simulateDDHGuesses(rounds: number): {
+  rounds: number;
+  hits: number;
+  rate: number;
+} {
+  let hits = 0;
+  for (let i = 0; i < rounds; i += 1) {
+    const { b1Index } = generateDDHPoints();
+    // Strategy: always pick a fresh CSPRNG index. Any strategy scores the same
+    // under DDH; we pick randomly to underline "no better than a guess".
+    if (randomIndex(3) === b1Index) hits += 1;
+  }
+  return { rounds, hits, rate: hits / rounds };
+}
+
+// ── Key reconciliation (Section B: why the keys line up) ─────────────
+
+/**
+ * Compute BOTH parties' INDEPENDENT paths to the shared secret point, each from
+ * that party's own secret scalar, using the real Edwards25519 arithmetic —
+ * nothing is faked. This is the heart of "why the keys line up".
+ *
+ *   - receiver walks  r · A         (uses r, the receiver's secret)
+ *   - sender   walks  a · B         (b = 0)  or  a · (B − A)   (b = 1)   (uses a)
+ *
+ * Because A = aG and (for the chosen b) B−A or B reduces to rG, both routes
+ * collapse to the SAME point a·r·G = arG. The equality is checked here on the
+ * real byte encodings, not asserted. The UI animates the two routes meeting at
+ * the identical green point; the sender's OTHER key is returned to show the
+ * unchosen path lands somewhere different.
+ */
+export function reconcileKeys(
+  a: bigint,
+  r: bigint,
+  ABytes: Uint8Array,
+  BBytes: Uint8Array,
+  b: 0 | 1,
+): {
+  b: 0 | 1;
+  receiverPointHex: string; // r·A  — computed from the receiver's own r
+  senderPointHex: string; // a·B (b=0) or a·(B−A) (b=1) — from the sender's own a
+  sharedPointHex: string; // arG, the point both sides land on
+  sharedMatches: boolean; // TRUE iff the two encodings are byte-identical
+  chosenKeyHex: string; // H(shared point) — the working key
+  otherKeyHex: string; // sender's OTHER key — must NOT equal chosenKeyHex
+  senderPointExpr: string; // human label for the sender's path
+} {
+  const APoint = Point.fromHex(bytesToHex(ABytes));
+  const BPoint = Point.fromHex(bytesToHex(BBytes));
+
+  // Receiver's independent route: r · A.
+  const receiverPoint = APoint.multiply(r);
+  // Sender's independent route for the chosen bit.
+  const senderChosenPoint =
+    b === 0 ? BPoint.multiply(a) : BPoint.subtract(APoint).multiply(a);
+  // Sender's OTHER route (the unchosen key the receiver can never reach).
+  const senderOtherPoint =
+    b === 0 ? BPoint.subtract(APoint).multiply(a) : BPoint.multiply(a);
+
+  const receiverHex = bytesToHex(receiverPoint.toBytes());
+  const senderHex = bytesToHex(senderChosenPoint.toBytes());
+  const chosenKey = sha256(senderChosenPoint.toBytes());
+  const otherKey = sha256(senderOtherPoint.toBytes());
+
+  return {
+    b,
+    receiverPointHex: receiverHex,
+    senderPointHex: senderHex,
+    sharedPointHex: senderHex,
+    sharedMatches: receiverHex === senderHex,
+    chosenKeyHex: bytesToHex(chosenKey),
+    otherKeyHex: bytesToHex(otherKey),
+    senderPointExpr: b === 0 ? 'a · B' : 'a · (B − A)',
+  };
+}

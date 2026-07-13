@@ -9,6 +9,8 @@ import {
   tryDecrypt,
   runFullOT,
   generateDDHPoints,
+  simulateDDHGuesses,
+  reconcileKeys,
   randomIndex,
   bytesToHex,
 } from './ot';
@@ -160,6 +162,42 @@ describe('DDH visualizer', () => {
     const seen = new Set<number>();
     for (let i = 0; i < 60; i += 1) seen.add(generateDDHPoints().b1Index);
     expect(seen).toEqual(new Set([0, 1, 2]));
+  });
+});
+
+describe('reconcileKeys — the two independent routes to arG (teaching panel)', () => {
+  it('receiver r·A equals sender a·B (b=0) / a·(B−A) (b=1) on the real bytes', () => {
+    for (const choice of [0, 1] as const) {
+      const sender = senderInit();
+      const receiver = receiverChoose(sender.ABytes, choice);
+      const rec = reconcileKeys(
+        sender.a,
+        receiver.r,
+        sender.ABytes,
+        receiver.BBytes,
+        choice,
+      );
+      // The two independent point routes must land on the SAME encoded point.
+      expect(rec.receiverPointHex).toBe(rec.senderPointHex);
+      expect(rec.sharedMatches).toBe(true);
+      // The chosen key equals the receiver's actual derived key from the protocol.
+      expect(rec.chosenKeyHex).toBe(receiver.keyHex);
+      // The other key is genuinely different — the unchosen path is unreachable.
+      expect(rec.otherKeyHex).not.toBe(rec.chosenKeyHex);
+      expect(rec.senderPointExpr).toBe(choice === 0 ? 'a · B' : 'a · (B − A)');
+    }
+  });
+});
+
+describe('simulateDDHGuesses — empirical ~1/3 hit rate', () => {
+  it('a random strategy over real challenges lands near 33% (never a trivial 0 or 1)', () => {
+    const { rounds, hits, rate } = simulateDDHGuesses(600);
+    expect(rounds).toBe(600);
+    expect(hits).toBe(Math.round(rate * 600));
+    // Loose bounds: with 600 draws at p=1/3, being outside [0.22, 0.45] is
+    // astronomically unlikely, but stays generous to avoid flakiness.
+    expect(rate).toBeGreaterThan(0.22);
+    expect(rate).toBeLessThan(0.45);
   });
 });
 

@@ -7,6 +7,8 @@ import {
   tryDecrypt,
   runFullOT,
   generateDDHPoints,
+  simulateDDHGuesses,
+  reconcileKeys,
   bytesToHex,
   bigintToHex,
   type SenderState,
@@ -166,7 +168,17 @@ function sectionB(): string {
       <div class="subsection">
         <h3>B1. Protocol Description</h3>
         <p>The Simplest OT uses <strong>Edwards25519</strong> (Curve25519 in twisted
-           Edwards form). Let G be the base point.</p>
+           Edwards form). Every value below is a point on this curve or a big secret number.</p>
+
+        <div class="term-key" role="note" aria-label="Terms used in this section">
+          <p class="term-key-head">First, four terms this protocol leans on:</p>
+          <ul class="term-list">
+            <li>${gloss('scalar (a, r)', 'a big secret random number, ~253 bits. Kept private; never sent.')}</li>
+            <li>${gloss('G — the base point', 'a fixed, public point on the curve that everyone agrees on.')}</li>
+            <li>${gloss('a · P (scalar times point)', 'add point P to itself a times. Easy forward; reversing it (finding a from a·P) is the hard discrete-log problem.')}</li>
+            <li>${gloss('H(…)', 'SHA-256 — hashes a curve point down to a 256-bit AES key.')}</li>
+          </ul>
+        </div>
 
         <div class="protocol-flow" role="img" aria-label="Protocol flow: Step 1 Sender generates scalar a and sends A=aG. Step 2 Receiver generates B based on choice bit b. Step 3 Sender derives keys k0 and k1, encrypts and sends E0 and E1. Step 4 Receiver derives key and decrypts chosen message.">
           <div class="flow-col flow-sender">
@@ -192,14 +204,24 @@ function sectionB(): string {
           </div>
         </div>
 
-        <p><strong>Why it works:</strong></p>
+        <p><strong>Why it works:</strong> the trick is that scalar multiplication
+           <em>commutes</em> — a·(r·G) and r·(a·G) are the same point, so the two
+           parties reach one shared secret by different routes.</p>
         <ul>
-          <li>If b=0: B&nbsp;=&nbsp;rG, so a·B&nbsp;=&nbsp;arG&nbsp;=&nbsp;r·A →
-              k<sub>0</sub>&nbsp;=&nbsp;H(r·A) ✅ receiver can decrypt M<sub>0</sub></li>
-          <li>If b=1: B&nbsp;=&nbsp;A+rG, so a·(B−A)&nbsp;=&nbsp;arG&nbsp;=&nbsp;r·A →
-              k<sub>1</sub>&nbsp;=&nbsp;H(r·A) ✅ receiver can decrypt M<sub>1</sub></li>
-          <li>Sender cannot distinguish b=0 from b=1: B&nbsp;=&nbsp;rG vs B&nbsp;=&nbsp;A+rG
-              are computationally indistinguishable under the DDH assumption</li>
+          <li><strong>If b=0:</strong> the receiver sends B&nbsp;=&nbsp;rG. The sender
+              computes a·B&nbsp;=&nbsp;a·(rG)&nbsp;=&nbsp;<strong>arG</strong>. The receiver
+              computes r·A&nbsp;=&nbsp;r·(aG)&nbsp;=&nbsp;<strong>arG</strong>. Same point →
+              k<sub>0</sub>&nbsp;=&nbsp;H(arG) matches, so M<sub>0</sub> unlocks. ✅</li>
+          <li><strong>If b=1</strong> (the tricky one): the receiver sends B&nbsp;=&nbsp;A+rG —
+              it has A <em>folded in</em>. The sender first <em>peels A back off</em>:
+              B−A&nbsp;=&nbsp;(A+rG)−A&nbsp;=&nbsp;rG, then multiplies by a to get
+              a·(B−A)&nbsp;=&nbsp;<strong>arG</strong> — the very same shared point the
+              receiver reaches via r·A. So k<sub>1</sub>&nbsp;=&nbsp;H(arG) matches and
+              M<sub>1</sub> unlocks. ✅ The subtraction is what quietly selects
+              <em>which</em> of the sender's two keys the receiver can reach.</li>
+          <li><strong>Why the sender stays blind:</strong> B&nbsp;=&nbsp;rG (b=0) and
+              B&nbsp;=&nbsp;A+rG (b=1) are ${gloss('computationally indistinguishable under DDH', 'DDH = Decisional Diffie-Hellman: given rG you cannot tell it apart from a random curve point, so the sender cannot read b off B.')}.
+              Try to break that yourself in the DDH game below (Section&nbsp;C2).</li>
         </ul>
       </div>
 
@@ -260,6 +282,9 @@ function sectionB(): string {
              Keeps AT users from having raw hex read out character by character. -->
         <div id="sr-status" class="sr-only" role="status" aria-live="polite"></div>
 
+        <!-- Key reconciliation: the two independent routes to the shared point -->
+        <div id="key-reconcile" class="key-reconcile" hidden></div>
+
         <!-- Privacy audit -->
         <div id="privacy-audit" hidden>
           <h3>Privacy Audit</h3>
@@ -300,11 +325,38 @@ function sectionC(): string {
       <div class="subsection">
         <h3>C2. DDH Hardness Visualizer</h3>
         <p>Three Ed25519 points are generated. Two are random (r·G) and one is of
-           the form A&nbsp;+&nbsp;r·G (the b=1 case). Try to pick out the odd one —
-           if you can't beat a 1-in-3 guess, that's the DDH assumption protecting
-           the receiver's choice.</p>
-        <button id="btn-ddh" class="btn" type="button">Generate Points</button>
+           the form A&nbsp;+&nbsp;r·G (the b=1 case). Try to pick out the odd one.
+           One guess feels like a gotcha — so play a <strong>10-round match</strong>
+           and watch your accuracy. If you can't beat the dashed 1-in-3 line, that
+           inability <em>is</em> the DDH assumption protecting the receiver's choice.</p>
+
+        <!-- Running tally across the 10-round match -->
+        <div class="ddh-scoreboard" role="group" aria-label="DDH match scoreboard">
+          <div class="ddh-score-stat">
+            <span class="ddh-score-num" id="ddh-round">0</span>
+            <span class="ddh-score-cap">of 10 rounds</span>
+          </div>
+          <div class="ddh-score-stat">
+            <span class="ddh-score-num" id="ddh-hits">0</span>
+            <span class="ddh-score-cap">correct</span>
+          </div>
+          <div class="ddh-score-stat">
+            <span class="ddh-score-num" id="ddh-acc">—</span>
+            <span class="ddh-score-cap">your accuracy vs 33% baseline</span>
+          </div>
+        </div>
+        <div class="ddh-bar" role="img" aria-hidden="true">
+          <div class="ddh-bar-baseline"></div>
+          <div class="ddh-bar-fill" id="ddh-bar-fill"></div>
+        </div>
+
+        <div class="ddh-controls">
+          <button id="btn-ddh" class="btn" type="button">Deal a round</button>
+          <button id="btn-ddh-auto" class="btn" type="button">Let the computer guess 1000×</button>
+          <button id="btn-ddh-reset" class="btn" type="button" hidden>Reset match</button>
+        </div>
         <div id="ddh-results"></div>
+        <div id="ddh-auto" class="ddh-auto" aria-live="polite"></div>
       </div>
 
       <div class="subsection">
@@ -457,6 +509,20 @@ function plain(s: string): string {
   return s.replace(/<[^>]*>/g, '');
 }
 
+// A first-use micro-definition. Renders the term with a dotted underline and an
+// inline aside gloss that is available to sighted users (title + visible ⓘ) and
+// to screen readers (the gloss text is real DOM text, not color-only).
+function gloss(term: string, def: string): string {
+  return `<span class="gloss"><span class="gloss-term">${term}</span><span class="gloss-def"> — ${def}</span></span>`;
+}
+
+// A small colored token ("chip") that visually links a named value (A, B, k₀…)
+// across panels. The name is real text (never color alone) so it stays
+// accessible; the color is a redundant cue. `kind` maps to a CSS class.
+function chip(name: string, kind: string): string {
+  return `<span class="cl-chip cl-chip-${kind}">${name}</span>`;
+}
+
 // A labelled hex value with a copy button. `display` shows a shortened form
 // while the full value is what actually gets copied.
 function hexBlock(
@@ -499,6 +565,74 @@ function setupCopyButtons(): void {
         /* clipboard blocked (insecure context / permissions) — no-op */
       });
   });
+}
+
+// A short, glanceable hex fragment (first 10 chars) used inside chips/tokens so
+// the learner can eyeball "same vs different" without a wall of hex.
+function frag(hex: string): string {
+  return hex.slice(0, 10) + '…';
+}
+
+// Render the "why the keys line up" reconciliation panel. Shows the two
+// independent routes to the shared point arG (receiver via r·A, sender via a·B
+// or a·(B−A)), highlights that they land on the SAME point in green, and shows
+// the sender's OTHER key landing elsewhere (broken/red link). All values come
+// from reconcileKeys(), which does the real curve math — nothing is faked.
+function renderReconcile(rec: ReturnType<typeof reconcileKeys>): void {
+  const panel = $('#key-reconcile');
+  const matchCls = rec.sharedMatches ? 'match' : 'nomatch';
+  const bStep =
+    rec.b === 0
+      ? 'B = rG, so a·B = a·(rG) = arG.'
+      : 'B = A + rG. The sender peels A off first: B − A = rG, then a·(B − A) = arG.';
+
+  panel.hidden = false;
+  panel.innerHTML = `
+    <h3>Why the two keys line up</h3>
+    <p class="reconcile-intro">
+      The receiver (with secret <em>r</em>) and the sender (with secret <em>a</em>)
+      never share a scalar — yet both compute the <strong>same</strong> secret point.
+      Watch the two routes meet. You chose <strong>b = ${rec.b}</strong>, so ${bStep}
+    </p>
+    <div class="reconcile-grid" role="img"
+         aria-label="Receiver computes r times A and sender computes ${plain(rec.senderPointExpr)}; both reduce to the same point a r G, so the derived keys are identical.">
+      <div class="reconcile-lane receiver-lane">
+        <div class="reconcile-party">${chip('Receiver', 'receiver')} knows <em>r</em></div>
+        <div class="reconcile-op">r · A</div>
+        <div class="reconcile-frag" aria-hidden="true">${frag(rec.receiverPointHex)}</div>
+      </div>
+      <div class="reconcile-lane sender-lane">
+        <div class="reconcile-party">${chip('Sender', 'sender')} knows <em>a</em></div>
+        <div class="reconcile-op">${rec.senderPointExpr}</div>
+        <div class="reconcile-frag" aria-hidden="true">${frag(rec.senderPointHex)}</div>
+      </div>
+      <div class="reconcile-meet ${matchCls}">
+        <div class="reconcile-meet-arrow" aria-hidden="true">↘&nbsp;&nbsp;↙</div>
+        <div class="reconcile-shared">
+          <span class="reconcile-badge">${rec.sharedMatches ? '✓ same point' : '✗ mismatch'}</span>
+          <span class="reconcile-shared-label">arG</span>
+          <span class="reconcile-frag" aria-hidden="true">${frag(rec.sharedPointHex)}</span>
+        </div>
+      </div>
+    </div>
+    <div class="reconcile-keys">
+      <div class="reconcile-key key-ok">
+        ${chip('k' + (rec.b === 0 ? '₀' : '₁'), 'key-match')}
+        H(arG) = <span class="reconcile-frag" aria-hidden="true">${frag(rec.chosenKeyHex)}</span>
+        <span class="reconcile-note">— the working key. Receiver's k<sub>b</sub> equals this exactly.</span>
+      </div>
+      <div class="reconcile-key key-bad">
+        ${chip('k' + (rec.b === 0 ? '₁' : '₀'), 'key-nomatch')}
+        <span class="reconcile-frag" aria-hidden="true">${frag(rec.otherKeyHex)}</span>
+        <span class="reconcile-note">— the sender's OTHER key. Lands on a different point, so the receiver can't reach it. That's what keeps M<sub>${rec.b === 0 ? 1 : 0}</sub> hidden.</span>
+      </div>
+    </div>`;
+
+  announce(
+    rec.sharedMatches
+      ? `Key reconciliation: the receiver's r times A and the sender's ${plain(rec.senderPointExpr)} both reduce to the same point a r G, so their keys match. The sender's other key lands elsewhere.`
+      : 'Key reconciliation mismatch — this should not happen.',
+  );
 }
 
 function addChannelMsg(label: string, hex: string): void {
@@ -591,6 +725,9 @@ async function onSenderInit(): Promise<void> {
   $('#sender-output').innerHTML = '';
   $('#receiver-output').innerHTML = '';
   $('#privacy-audit').hidden = true;
+  const kr = $('#key-reconcile');
+  kr.hidden = true;
+  kr.innerHTML = '';
   senderBtn.textContent = 'Initialize Sender';
 
   try {
@@ -670,10 +807,15 @@ async function onReceiverChoose(): Promise<void> {
     const enc = await senderEncrypt(currentSender, receiver.BBytes, valid.m0, valid.m1);
     const e0Hex = bytesToHex(enc.e0.ciphertext);
     const e1Hex = bytesToHex(enc.e1.ciphertext);
+    // Color-code the two keys by whether the receiver can reach them: the key
+    // matching the receiver's choice b gets the green "match" chip (same color
+    // used on the receiver's derived key below); the other gets the red chip.
+    const k0Chip = b === 0 ? chip('k₀', 'key-match') : chip('k₀', 'key-nomatch');
+    const k1Chip = b === 1 ? chip('k₁', 'key-match') : chip('k₁', 'key-nomatch');
     // Show sender keys and ciphertexts
     $('#sender-output').innerHTML +=
-      hexBlock('k<sub>0</sub> = H(a·B)', enc.k0Hex) +
-      hexBlock('k<sub>1</sub> = H(a·(B−A))', enc.k1Hex) +
+      hexBlock(`${k0Chip} k<sub>0</sub> = H(a·B)`, enc.k0Hex) +
+      hexBlock(`${k1Chip} k<sub>1</sub> = H(a·(B−A))`, enc.k1Hex) +
       hexBlock('E<sub>0</sub> (encrypted M<sub>0</sub>)', e0Hex, { display: truncHex(e0Hex, 64) }) +
       hexBlock('E<sub>1</sub> (encrypted M<sub>1</sub>)', e1Hex, { display: truncHex(e1Hex, 64) });
 
@@ -692,7 +834,10 @@ async function onReceiverChoose(): Promise<void> {
     const otherResult = await tryDecrypt(receiver.keyBytes, unchosen);
 
     $('#receiver-output').innerHTML +=
-      hexBlock("k<sub>b</sub> = H(r·A) — receiver's derived key", receiver.keyHex) +
+      hexBlock(
+        `${chip('k' + (b === 0 ? '₀' : '₁'), 'key-match')} k<sub>b</sub> = H(r·A) — matches the sender's k<sub>${b}</sub> (same green chip)`,
+        receiver.keyHex,
+      ) +
       `<div class="decrypted-msg">
         <span aria-hidden="true">✅ </span><strong>Decrypted M<sub>${b}</sub>:</strong> ${escapeHtml(decrypted)}
       </div>
@@ -710,6 +855,16 @@ async function onReceiverChoose(): Promise<void> {
         `and the sender never learned which one you chose.`,
       true,
     );
+
+    // Key reconciliation — show the two independent routes meeting at arG.
+    const rec = reconcileKeys(
+      currentSender.a,
+      receiver.r,
+      currentSender.ABytes,
+      receiver.BBytes,
+      b,
+    );
+    renderReconcile(rec);
 
     // Privacy audit
     const audit = $('#privacy-audit');
@@ -798,25 +953,59 @@ async function onCorrectnessCheck(): Promise<void> {
 //  Section C2 — DDH visualizer
 // ═══════════════════════════════════════════════════════════════════════
 
-// Index of the A+r·G point in the currently displayed DDH challenge, or null
-// once the user has already guessed / before any points exist.
-let ddhAnswer: number | null = null;
+// DDH match state. A "match" is a run of up to 10 rounds; we track the running
+// tally so the learner watches their accuracy converge on the 1-in-3 baseline.
+const DDH_MATCH_LEN = 10;
+let ddhAnswer: number | null = null; // A+r·G index of the CURRENT round, or null
+let ddhRound = 0; // rounds played so far this match
+let ddhHits = 0; // correct guesses so far this match
+
+// Refresh the scoreboard + bar from the current tally.
+function updateDDHScore(): void {
+  $('#ddh-round').textContent = String(ddhRound);
+  $('#ddh-hits').textContent = String(ddhHits);
+  const accEl = $('#ddh-acc');
+  const fill = $('#ddh-bar-fill');
+  if (ddhRound === 0) {
+    accEl.textContent = '—';
+    fill.style.width = '0%';
+    return;
+  }
+  const pct = (ddhHits / ddhRound) * 100;
+  accEl.textContent = `${pct.toFixed(0)}%`;
+  fill.style.width = `${Math.min(100, pct)}%`;
+}
+
+function resetDDHMatch(): void {
+  ddhAnswer = null;
+  ddhRound = 0;
+  ddhHits = 0;
+  updateDDHScore();
+  $('#ddh-results').innerHTML = '';
+  $('#ddh-auto').innerHTML = '';
+  $('#btn-ddh').textContent = 'Deal a round';
+  ($('#btn-ddh') as HTMLButtonElement).disabled = false;
+  $('#btn-ddh-reset').hidden = true;
+  announce('DDH match reset. Deal a round to start again.');
+}
 
 function onDDHGenerate(): void {
+  if (ddhRound >= DDH_MATCH_LEN) return; // match already complete
   const out = $('#ddh-results');
   const { points, b1Index, AHex } = generateDDHPoints();
   ddhAnswer = b1Index;
 
   announce(
-    'Generated three Curve25519 points. Two are random r·G and one is A + r·G. ' +
+    `Round ${ddhRound + 1} of ${DDH_MATCH_LEN}. Three Curve25519 points: two are random r·G and one is A + r·G. ` +
       'Choose the point you think is A + r·G. Under the DDH assumption they are indistinguishable, so it is a one-in-three guess.',
   );
 
-  $('#btn-ddh').textContent = 'Generate New Points';
+  $('#btn-ddh').textContent = `Round ${ddhRound + 1} of ${DDH_MATCH_LEN}`;
+  ($('#btn-ddh') as HTMLButtonElement).disabled = true; // re-enabled after guess
 
   out.innerHTML = `
-    ${hexBlock("A (sender's public point for this example)", AHex)}
-    <p class="ddh-prompt">Which point is <strong>A + r·G</strong> (the b=1 case)? Take your best guess:</p>
+    ${hexBlock("A (sender's public point for this round)", AHex)}
+    <p class="ddh-prompt">Round <strong>${ddhRound + 1}</strong>: which point is <strong>A + r·G</strong> (the b=1 case)? Take your best guess:</p>
     <div class="ddh-points" role="group" aria-label="Three candidate points — choose which one is A plus r·G">
       ${points
         .map(
@@ -837,6 +1026,10 @@ function onDDHGuess(idx: number): void {
   ddhAnswer = null; // lock further guesses for this round
   const correct = idx === answer;
 
+  ddhRound += 1;
+  if (correct) ddhHits += 1;
+  updateDDHScore();
+
   document.querySelectorAll<HTMLButtonElement>('.ddh-point').forEach((btn) => {
     const i = Number(btn.dataset.index);
     btn.disabled = true;
@@ -848,11 +1041,62 @@ function onDDHGuess(idx: number): void {
     }
   });
 
+  const matchDone = ddhRound >= DDH_MATCH_LEN;
+  const pct = ((ddhHits / ddhRound) * 100).toFixed(0);
+
   const fb = $('#ddh-feedback');
   fb.className = 'ddh-feedback ' + (correct ? 'ok' : 'fail');
-  fb.innerHTML = correct
-    ? `<strong>Correct — Point ${answer + 1}</strong> was A + r·G. But you had no real way to know: under DDH the three points are computationally indistinguishable, so you'd be right only about 1 time in 3. That indistinguishability is exactly what stops the sender from learning the receiver's choice b.`
-    : `<strong>Not quite — Point ${answer + 1}</strong> was A + r·G. Don't worry: under DDH the points are computationally indistinguishable, so no strategy beats a 1-in-3 guess. That's precisely why the sender can't tell B = rG (b=0) from B = A + rG (b=1).`;
+  const verdict = correct
+    ? `<strong>Correct — Point ${answer + 1}</strong> was A + r·G.`
+    : `<strong>Not quite — Point ${answer + 1}</strong> was A + r·G.`;
+  const tally = matchDone
+    ? ` Match over: <strong>${ddhHits}/${DDH_MATCH_LEN} = ${pct}%</strong>. Notice how it hugs the dashed 1-in-3 line — under DDH no strategy beats a blind guess, and that is exactly what hides the receiver's choice b from the sender.`
+    : ` Running: <strong>${ddhHits}/${ddhRound} = ${pct}%</strong>. Deal the next round.`;
+  fb.innerHTML = verdict + tally;
+
+  if (matchDone) {
+    $('#btn-ddh').textContent = 'Match complete';
+    ($('#btn-ddh') as HTMLButtonElement).disabled = true;
+  } else {
+    $('#btn-ddh').textContent = 'Deal next round';
+    ($('#btn-ddh') as HTMLButtonElement).disabled = false;
+  }
+  $('#btn-ddh-reset').hidden = false;
+
+  announce(
+    `${correct ? 'Correct' : 'Wrong'}. ${matchDone ? 'Match complete' : `Running score`}: ${ddhHits} of ${ddhRound}, ${pct} percent, versus a 33 percent baseline.`,
+  );
+}
+
+// "Let the computer guess 1000×": run 1000 REAL DDH challenges and let a random
+// strategy play each. The ~33% hit rate is measured, not hardcoded.
+function onDDHAuto(): void {
+  const btn = $('#btn-ddh-auto') as HTMLButtonElement;
+  const out = $('#ddh-auto');
+  btn.disabled = true;
+  out.innerHTML =
+    '<p class="check-status"><span class="spinner" aria-hidden="true"></span> Running 1000 real DDH challenges…</p>';
+
+  // Defer so the spinner paints before the (fast but non-trivial) point math.
+  window.setTimeout(() => {
+    const N = 1000;
+    const { hits, rate } = simulateDDHGuesses(N);
+    const pct = (rate * 100).toFixed(1);
+    out.innerHTML = `
+      <div class="ddh-auto-result">
+        <div class="ddh-auto-figure">
+          <span class="ddh-auto-num">${pct}%</span>
+          <span class="ddh-auto-cap">${hits} hits in ${N} real challenges</span>
+        </div>
+        <div class="ddh-auto-bar" role="img" aria-label="Computer hit rate ${pct} percent, essentially on the 33 percent baseline">
+          <div class="ddh-auto-bar-baseline"></div>
+          <div class="ddh-auto-bar-fill" style="width:${Math.min(100, rate * 100)}%"></div>
+        </div>
+        <p class="ddh-auto-note">Each of the ${N} rounds generated real Curve25519 points and the computer guessed at random. It lands near <strong>33.3%</strong> — the 1-in-3 baseline — because under DDH there is no signal to exploit. That empirical flatness is the security property, felt rather than asserted.</p>
+      </div>`;
+    announce(`Computer guessed ${hits} of ${N} correctly, about ${pct} percent — essentially the 33 percent baseline.`);
+    btn.disabled = false;
+  }, 30);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -885,7 +1129,10 @@ function mount(): void {
   $('#btn-correctness').addEventListener('click', () => void onCorrectnessCheck());
 
   // C2 DDH
+  updateDDHScore();
   $('#btn-ddh').addEventListener('click', onDDHGenerate);
+  $('#btn-ddh-auto').addEventListener('click', onDDHAuto);
+  $('#btn-ddh-reset').addEventListener('click', resetDDHMatch);
   $('#ddh-results').addEventListener('click', (e) => {
     const pt = (e.target as HTMLElement).closest<HTMLButtonElement>('.ddh-point');
     if (pt && !pt.disabled) onDDHGuess(Number(pt.dataset.index));

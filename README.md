@@ -19,6 +19,14 @@ crypto-lab-ot-gate implements 1-of-2 Oblivious Transfer using the Simplest OT pr
 
 Enter two messages as the sender and select your choice as the receiver. The demo executes the full Simplest OT protocol with real Edwards25519 Diffie-Hellman values and AES-256-GCM encryption. The privacy audit panels show exactly what each party sees, confirming that the sender cannot determine the receiver's choice and the receiver cannot decrypt the unchosen message.
 
+Three teaching visuals sit on top of the real protocol (they never fake a value):
+
+1. **Key-reconciliation panel** — after the receiver decrypts, the demo shows the two *independent* routes to the shared secret side by side: the receiver's `r·A` and the sender's `a·B` (or `a·(B−A)` when b=1). Both are computed from real curve math and shown landing on the *same* point `arG` (highlighted green), while the sender's other key lands elsewhere (red) — making the commutativity the whole protocol rests on visible instead of algebraic.
+2. **Color-coded value chips** — the sender's `k₀`/`k₁` and the receiver's derived key carry matching green/red chips so "which key equals which" reads as a diagram rather than a wall of hex.
+3. **DDH match** — the hardness visualizer is a 10-round game with a running accuracy tally against the dashed 1-in-3 baseline, plus a "let the computer guess 1000×" button that runs 1000 real DDH challenges and plots the measured ~33% hit rate. The inability to beat random *is* the security assumption, felt empirically rather than asserted.
+
+First-use micro-glosses (scalar, base point G, `a·P`, `H`, DDH) are inlined so a newcomer to elliptic-curve crypto has an on-ramp without cluttering the narrative for those who already know.
+
 ## What Can Go Wrong
 
 - **Malicious sender substituting A:** a malicious sender can send a specially crafted A (e.g., A = identity element) that allows them to learn the receiver's choice. The Simplest OT is secure against a semi-honest sender but requires additional checks for malicious security.
@@ -51,7 +59,12 @@ against the real protocol code in `src/ot.ts`:
 - **Sender privacy structure:** B(b=0) and B(b=1) are both valid, distinct curve
   points and the sender's encryption never branches on b.
 - **DDH visualizer:** produces three distinct valid curve points and an unbiased
-  CSPRNG-selected index.
+  CSPRNG-selected index; the 1000× auto-simulation's random strategy is verified
+  to land near the 1-in-3 baseline over real challenges (never a trivial 0 or 1).
+- **Key reconciliation:** the receiver's `r·A` and the sender's `a·B` /
+  `a·(B−A)` are asserted byte-identical (the point both parties reach), the
+  reconciled key equals the receiver's actual protocol key, and the unchosen key
+  differs — the same identity the teaching panel visualizes.
 
 ```bash
 npm test          # Vitest unit/property tests (crypto correctness + privacy)

@@ -30,6 +30,8 @@
   --receiver-text: var(--receiver-color);
   --success-text: var(--success);
   --warning-text: var(--warning);
+  /* Sender blue is bright enough on dark surfaces to serve as text as-is. */
+  --sender-text: var(--sender-color);
 }
 
 [data-theme='light'] {
@@ -58,6 +60,10 @@
   --receiver-text: #b45309;
   --success-text: #036249;
   --warning-text: #c2410c;
+  /* Light-theme sender ink: #2563eb clears 4.5:1 on white but not on a light
+     blue tint — darken for text/chip use while keeping the bright hue for
+     borders/fills. */
+  --sender-text: #1d4ed8;
 }
 
 /* ── Reset & base ──────────────────────────────────────────────────── */
@@ -1133,6 +1139,303 @@ td { color: var(--text); }
   background: color-mix(in srgb, var(--receiver-color) 15%, transparent);
   color: var(--receiver-text);
 }
+
+/* ── Term glosses (first-use micro-definitions) ────────────────────── */
+
+.gloss .gloss-term {
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px dotted var(--accent);
+}
+.gloss .gloss-def {
+  color: var(--text-muted);
+}
+
+.term-key {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 0.85rem 1rem 0.6rem;
+  margin: 1rem 0 1.25rem;
+  font-size: 0.9rem;
+}
+.term-key-head {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.term-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.term-list li { margin-bottom: 0.4rem; }
+
+/* ── Named value chips (link A/B/k across panels; text + color, never
+      color alone — the label is real text) ───────────────────────────── */
+
+.cl-chip {
+  display: inline-block;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  vertical-align: baseline;
+}
+/* Chips use a neutral surface background so the darker ink tokens clear 4.5:1
+   in BOTH themes; the hue identity comes from the colored border + ink, not a
+   tint that would drag contrast down (the amber receiver ink is borderline). */
+.cl-chip-sender {
+  color: var(--sender-text);
+  background: var(--surface);
+  border-color: var(--sender-color);
+}
+.cl-chip-receiver {
+  color: var(--receiver-text);
+  background: var(--surface);
+  border-color: var(--receiver-color);
+}
+.cl-chip-key-match {
+  color: var(--success-text);
+  background: var(--surface);
+  border-color: var(--success);
+}
+.cl-chip-key-nomatch {
+  color: var(--danger-text);
+  background: var(--surface);
+  border-color: var(--hidden);
+}
+
+/* ── Key reconciliation panel (Section B2) ─────────────────────────── */
+
+.key-reconcile {
+  margin: 1.5rem 0;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.key-reconcile h3 { margin-top: 0; color: var(--text); }
+.reconcile-intro {
+  font-size: 0.92rem;
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+
+.reconcile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1rem;
+  align-items: stretch;
+}
+.reconcile-lane {
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.receiver-lane {
+  background: var(--receiver-surface);
+  border-color: var(--receiver-color);
+}
+.sender-lane {
+  background: var(--sender-surface);
+  border-color: var(--sender-color);
+}
+.reconcile-party {
+  font-size: 0.82rem;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+.reconcile-op {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.35rem;
+}
+.reconcile-frag {
+  display: block;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.reconcile-meet {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 0.5rem;
+  border-radius: 8px;
+}
+.reconcile-meet-arrow {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  letter-spacing: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+.reconcile-shared {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: 2px solid var(--success);
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  animation: reconcileMeet 0.5s ease-out;
+}
+.reconcile-meet.nomatch .reconcile-shared {
+  border-color: var(--hidden);
+  background: color-mix(in srgb, var(--hidden) 12%, var(--surface));
+}
+.reconcile-badge {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--success-text);
+}
+.reconcile-meet.nomatch .reconcile-badge { color: var(--danger-text); }
+.reconcile-shared-label {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 700;
+  color: var(--text);
+}
+
+@keyframes reconcileMeet {
+  from { transform: scale(0.94); opacity: 0.4; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.reconcile-keys {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.reconcile-key {
+  font-size: 0.86rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.reconcile-key.key-ok {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+  background: color-mix(in srgb, var(--success) 7%, var(--surface));
+}
+.reconcile-key.key-bad {
+  border-color: color-mix(in srgb, var(--hidden) 40%, var(--border));
+  background: color-mix(in srgb, var(--hidden) 6%, var(--surface));
+}
+.reconcile-note { color: var(--text-muted); }
+
+@media (max-width: 560px) {
+  .reconcile-grid { grid-template-columns: 1fr; }
+}
+
+/* ── DDH match scoreboard + bar (Section C2) ───────────────────────── */
+
+.ddh-scoreboard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1rem 0 0.5rem;
+}
+.ddh-score-stat {
+  flex: 1 1 120px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0.6rem 0.8rem;
+  text-align: center;
+}
+.ddh-score-num {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: ui-monospace, Consolas, monospace;
+}
+.ddh-score-cap {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ddh-bar {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin: 0 0 1rem;
+}
+.ddh-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+/* Dashed 1-in-3 baseline marker at 33.3% */
+.ddh-bar-baseline,
+.ddh-auto-bar-baseline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 33.3%;
+  width: 0;
+  border-left: 2px dashed var(--text-muted);
+  z-index: 1;
+}
+
+.ddh-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* ── DDH auto-simulation (computer guesses 1000×) ──────────────────── */
+
+.ddh-auto { margin-top: 1rem; }
+.ddh-auto-result {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 1rem;
+}
+.ddh-auto-figure {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.ddh-auto-num {
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--accent);
+}
+.ddh-auto-cap { font-size: 0.85rem; color: var(--text-muted); }
+.ddh-auto-bar {
+  position: relative;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 0.6rem;
+}
+.ddh-auto-bar-fill {
+  height: 100%;
+  background: var(--success);
+}
+.ddh-auto-note { font-size: 0.86rem; color: var(--text); margin: 0; }
 
 /* ── Responsive ────────────────────────────────────────────────────── */
 
