@@ -220,9 +220,22 @@ function sectionB(): string {
               M<sub>1</sub> unlocks. ✅ The subtraction is what quietly selects
               <em>which</em> of the sender's two keys the receiver can reach.</li>
           <li><strong>Why the sender stays blind:</strong> B&nbsp;=&nbsp;rG (b=0) and
-              B&nbsp;=&nbsp;A+rG (b=1) are ${gloss('computationally indistinguishable under DDH', 'DDH = Decisional Diffie-Hellman: given rG you cannot tell it apart from a random curve point, so the sender cannot read b off B.')}.
-              Try to break that yourself in the DDH game below (Section&nbsp;C2).</li>
+              B&nbsp;=&nbsp;A+rG (b=1) are ${gloss('perfectly indistinguishable', 'r is a fresh uniform scalar, so rG and A+rG are both uniform over the group — the distributions are identical, not merely hard to tell apart. Chou-Orlandi prove that even a computationally unbounded sender guesses the choice with probability only 1/n (Lemma 1).')}
+              — no computational assumption required, so long as A really is a
+              prime-order point (see the subgroup caveat in the README).
+              Try to break it yourself in the game below (Section&nbsp;C2).</li>
         </ul>
+
+        <p class="note"><strong>Simplification in this demo.</strong> Keys here are
+           H(a·B) and H(r·A) — the shared point alone. Chou-Orlandi instead salt the
+           hash with the transcript: H is typed
+           (G&nbsp;×&nbsp;G)&nbsp;×&nbsp;G&nbsp;→&nbsp;{0,1}<sup>κ</sup>, and both sides
+           feed it the public keys, so k<sub>j</sub>&nbsp;=&nbsp;H<sub>(A,B)</sub>(a·B&nbsp;−&nbsp;j·aA)
+           and k<sub>R</sub>&nbsp;=&nbsp;H<sub>(A,B)</sub>(r·A). That salt keeps the
+           random oracle local to this session. Without it a man-in-the-middle can pass
+           A through, hand the sender B′&nbsp;=&nbsp;A+B, and rotate the ciphertexts so
+           the receiver unlocks the <em>wrong</em> message. Real deployments bind the
+           transcript; the demo drops it to keep the hex short.</p>
       </div>
 
       <div class="subsection">
@@ -323,15 +336,17 @@ function sectionC(): string {
       </div>
 
       <div class="subsection">
-        <h3>C2. DDH Hardness Visualizer</h3>
+        <h3>C2. Choice-Hiding Visualizer</h3>
         <p>Three Ed25519 points are generated. Two are random (r·G) and one is of
            the form A&nbsp;+&nbsp;r·G (the b=1 case). Try to pick out the odd one.
            One guess feels like a gotcha — so play a <strong>10-round match</strong>
-           and watch your accuracy. If you can't beat the dashed 1-in-3 line, that
-           inability <em>is</em> the DDH assumption protecting the receiver's choice.</p>
+           and watch your accuracy. You cannot beat the dashed 1-in-3 line, and not
+           because some problem is merely <em>hard</em>: r is uniform, so A&nbsp;+&nbsp;r·G
+           is a uniform curve point exactly like r·G. The choice bit is hidden from
+           the sender unconditionally.</p>
 
         <!-- Running tally across the 10-round match -->
-        <div class="ddh-scoreboard" role="group" aria-label="DDH match scoreboard">
+        <div class="ddh-scoreboard" role="group" aria-label="Choice-hiding match scoreboard">
           <div class="ddh-score-stat">
             <span class="ddh-score-num" id="ddh-round">0</span>
             <span class="ddh-score-cap">of 10 rounds</span>
@@ -360,12 +375,16 @@ function sectionC(): string {
       </div>
 
       <div class="subsection">
-        <h3>C3. What Breaks if DDH Is Broken</h3>
-        <p>If the Decisional Diffie-Hellman assumption is broken — for example by a
-           quantum computer running Shor's algorithm — the sender could distinguish
-           B&nbsp;=&nbsp;rG from B&nbsp;=&nbsp;A+rG by solving the discrete
-           logarithm. OT protocols based on elliptic curves are
-           <strong>not post-quantum secure</strong>.</p>
+        <h3>C3. What Breaks if Diffie-Hellman Is Broken</h3>
+        <p>Chou-Orlandi rest on the <strong>computational</strong> Diffie-Hellman
+           assumption (in the random oracle model), and it protects the
+           <em>sender</em>, not the receiver. If CDH on Curve25519 falls — a quantum
+           computer running Shor's algorithm breaks it outright, along with discrete
+           log — a receiver could compute the one point it is missing, a²G, and from
+           it derive <em>both</em> k<sub>0</sub> and k<sub>1</sub>, opening both
+           messages. The choice bit stays hidden either way: that half of the
+           protocol never depended on an assumption. OT protocols based on elliptic
+           curves are <strong>not post-quantum secure</strong>.</p>
         <p class="warning-note">Post-quantum OT exists under lattice-based (LWE) or
            code-based assumptions, but it is not yet standardized and involves
            significantly larger parameters.</p>
@@ -986,7 +1005,7 @@ function resetDDHMatch(): void {
   $('#btn-ddh').textContent = 'Deal a round';
   ($('#btn-ddh') as HTMLButtonElement).disabled = false;
   $('#btn-ddh-reset').hidden = true;
-  announce('DDH match reset. Deal a round to start again.');
+  announce('Match reset. Deal a round to start again.');
 }
 
 function onDDHGenerate(): void {
@@ -997,7 +1016,7 @@ function onDDHGenerate(): void {
 
   announce(
     `Round ${ddhRound + 1} of ${DDH_MATCH_LEN}. Three Curve25519 points: two are random r·G and one is A + r·G. ` +
-      'Choose the point you think is A + r·G. Under the DDH assumption they are indistinguishable, so it is a one-in-three guess.',
+      'Choose the point you think is A + r·G. All three are uniformly distributed, so it is a one-in-three guess.',
   );
 
   $('#btn-ddh').textContent = `Round ${ddhRound + 1} of ${DDH_MATCH_LEN}`;
@@ -1050,7 +1069,7 @@ function onDDHGuess(idx: number): void {
     ? `<strong>Correct — Point ${answer + 1}</strong> was A + r·G.`
     : `<strong>Not quite — Point ${answer + 1}</strong> was A + r·G.`;
   const tally = matchDone
-    ? ` Match over: <strong>${ddhHits}/${DDH_MATCH_LEN} = ${pct}%</strong>. Notice how it hugs the dashed 1-in-3 line — under DDH no strategy beats a blind guess, and that is exactly what hides the receiver's choice b from the sender.`
+    ? ` Match over: <strong>${ddhHits}/${DDH_MATCH_LEN} = ${pct}%</strong>. Notice how it hugs the dashed 1-in-3 line — no strategy beats a blind guess here, however much computing power you bring, and that is exactly what hides the receiver's choice b from the sender.`
     : ` Running: <strong>${ddhHits}/${ddhRound} = ${pct}%</strong>. Deal the next round.`;
   fb.innerHTML = verdict + tally;
 
@@ -1075,7 +1094,7 @@ function onDDHAuto(): void {
   const out = $('#ddh-auto');
   btn.disabled = true;
   out.innerHTML =
-    '<p class="check-status"><span class="spinner" aria-hidden="true"></span> Running 1000 real DDH challenges…</p>';
+    '<p class="check-status"><span class="spinner" aria-hidden="true"></span> Running 1000 real challenges…</p>';
 
   // Defer so the spinner paints before the (fast but non-trivial) point math.
   window.setTimeout(() => {
@@ -1092,7 +1111,7 @@ function onDDHAuto(): void {
           <div class="ddh-auto-bar-baseline"></div>
           <div class="ddh-auto-bar-fill" style="width:${Math.min(100, rate * 100)}%"></div>
         </div>
-        <p class="ddh-auto-note">Each of the ${N} rounds generated real Curve25519 points and the computer guessed at random. It lands near <strong>33.3%</strong> — the 1-in-3 baseline — because under DDH there is no signal to exploit. That empirical flatness is the security property, felt rather than asserted.</p>
+        <p class="ddh-auto-note">Each of the ${N} rounds generated real Curve25519 points and the computer guessed at random. It lands near <strong>33.3%</strong> — the 1-in-3 baseline — because there is no signal to exploit: with r uniform, A + r·G is distributed exactly like r·G. That empirical flatness is the security property, felt rather than asserted.</p>
       </div>`;
     announce(`Computer guessed ${hits} of ${N} correctly, about ${pct} percent — essentially the 33 percent baseline.`);
     btn.disabled = false;

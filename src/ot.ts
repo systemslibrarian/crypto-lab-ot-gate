@@ -8,6 +8,15 @@
  * The x25519 Montgomery ladder is NOT used because it does not expose
  * point addition — only scalar-mult. We need addition for the receiver's
  * B = A + rG computation when b = 1.
+ *
+ * TEACHING SIMPLIFICATION — key derivation. We hash the shared point alone:
+ * H(a·B), H(a·(B−A)), H(r·A). Chou-Orlandi type the KDF as
+ * H : (G × G) × G → {0,1}^κ and salt it with the transcript, i.e.
+ * k_j = H_(A,B)(a·B − j·aA) and k_R = H_(A,B)(r·A). The salt localises the
+ * random oracle to the session; dropping it (as here) admits the malleability
+ * attack described in the paper's "Non-Malleability in Practice" — relay A,
+ * send the sender B' = A + B, rotate the ciphertexts, and the receiver opens
+ * the wrong message. Section B1 of the UI says so on the page.
  */
 
 import { ed25519 } from '@noble/curves/ed25519.js';
