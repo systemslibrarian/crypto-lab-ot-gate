@@ -136,7 +136,7 @@ function sectionA(): string {
 
       <div class="subsection">
         <h3>A3. Flavors of OT</h3>
-        <div class="table-wrapper">
+        <div class="table-wrapper" tabindex="0" role="region" aria-label="Flavors of oblivious transfer (scrollable table)">
           <table>
             <thead>
               <tr><th scope="col">Variant</th><th scope="col">Description</th><th scope="col">Use Case</th></tr>
@@ -391,7 +391,7 @@ function sectionD(): string {
            (hash functions and XOR). The ratio is roughly 128 base OTs →
            millions of extended OTs.</p>
 
-        <div class="table-wrapper">
+        <div class="table-wrapper" tabindex="0" role="region" aria-label="OT extension cost comparison (scrollable table)">
           <table>
             <thead>
               <tr><th scope="col">Method</th><th scope="col">OTs Needed</th><th scope="col">Time per OT</th><th scope="col">Total (1 M OTs)</th></tr>
