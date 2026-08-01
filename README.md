@@ -29,7 +29,7 @@ First-use micro-glosses (scalar, base point G, `a·P`, `H`, DDH) are inlined so 
 
 ## What Can Go Wrong
 
-- **Malicious sender substituting A:** a malicious sender can send a specially crafted A (e.g., A = identity element) that allows them to learn the receiver's choice. The Simplest OT is secure against a semi-honest sender but requires additional checks for malicious security.
+- **Malicious sender substituting A:** a malicious sender can send a specially crafted A (e.g., a low-order point outside the prime-order subgroup) so that `B = rG + bA` carries a torsion component that depends only on `b` — revealing the receiver's choice. The Simplest OT is secure against a semi-honest sender but requires a subgroup/torsion check on A for malicious security. (Sending `A` = the identity is a different failure: it makes `k₀` and `k₁` collapse to the same value, handing the receiver *both* messages.)
 - **Malicious receiver sending invalid B:** a malicious receiver can send B values outside the curve's prime-order subgroup, potentially extracting information about both messages. Subgroup membership checks on B are required for malicious security.
 - **Reusing the sender's scalar a:** the sender scalar a must be fresh for each OT session. Reusing a across sessions breaks the binding between A and the session, enabling key recovery.
 - **Side-channel on choice encoding:** the receiver's B computation differs based on b — implementations must ensure the two code paths take equal time and access the same memory to prevent timing and cache-based choice leakage.
@@ -39,7 +39,7 @@ First-use micro-glosses (scalar, base point G, `a·P`, `H`, DDH) are inlined so 
 
 - **SCALE-MAMBA / SPDZ protocol:** uses OT extension (built on base OT) to generate Beaver multiplication triples in the offline phase, enabling general-purpose secure computation.
 - **Google/Meta private set intersection:** deployed PSI protocols using OT extension for privacy-preserving ad measurement, allowing conversion attribution without sharing raw user identifiers.
-- **IETF PRIO (RFC 9521):** uses a related secret-sharing and MPC approach for aggregate telemetry without revealing individual measurements.
+- **IRTF Prio3 / VDAF (`draft-irtf-cfrg-vdaf`, still an Internet-Draft, not an RFC):** uses a related secret-sharing and MPC approach for aggregate telemetry without revealing individual measurements.
 - **EMP-toolkit:** open-source MPC research library with optimized IKNP OT extension, used in academic work on private machine learning and secure auctions.
 - **OpenMined PySyft:** uses OT-based protocols for federated learning with cryptographic privacy guarantees beyond differential privacy alone.
 
@@ -91,5 +91,7 @@ npm run dev
 - [crypto-lab-oblivious-shelf](https://systemslibrarian.github.io/crypto-lab-oblivious-shelf/) — IT-PIR for library query privacy.
 
 ---
+
+*One of 170+ browser demos in the [Crypto Lab](https://crypto-lab.systemslibrarian.dev/) suite.*
 
 *"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31*
