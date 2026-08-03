@@ -303,13 +303,19 @@ function sectionB(): string {
           <h3>Privacy Audit</h3>
           <div id="sender-sees" class="note" style="margin-bottom:0.75rem"></div>
           <div class="audit-grid">
+            <!-- The two halves are NOT symmetric, and this panel used to flatten
+                 them: it called choice hiding "computationally indistinguishable",
+                 contradicting B1, C2 and C3 on this same page, which all say it
+                 holds unconditionally. r is uniform, so rG and A+rG are the same
+                 distribution — there is nothing for computing power to attack.
+                 The receiver's side is the half that rests on an assumption. -->
             <div class="audit-box">
               <div class="audit-question">What the sender learned about the receiver's choice:</div>
-              <div class="audit-answer">Nothing. B is computationally indistinguishable from a random point.</div>
+              <div class="audit-answer">Nothing, unconditionally. With <em>r</em> uniform, B&nbsp;=&nbsp;rG and B&nbsp;=&nbsp;A+rG are <strong>perfectly indistinguishable</strong> — identical distributions, not merely hard to tell apart — so no amount of computing power helps.</div>
             </div>
             <div class="audit-box">
               <div class="audit-question">What the receiver learned about the unchosen message:</div>
-              <div class="audit-answer">Nothing. E<sub>1−b</sub> is encrypted under a key the receiver cannot compute.</div>
+              <div class="audit-answer">Nothing, under <strong>CDH</strong>. E<sub>1−b</sub> is encrypted under a key the receiver cannot compute without breaking computational Diffie-Hellman on Curve25519 — this half is the assumption-dependent one.</div>
             </div>
           </div>
         </div>

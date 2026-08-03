@@ -3,6 +3,18 @@
    Two-party protocol aesthetic: sender (blue) | channel (gray) | receiver (amber)
    ═══════════════════════════════════════════════════════════════════ */
 
+/* The `hidden` attribute must actually hide. The UA sheet's [hidden]{display:none}
+   loses to any author rule that sets `display` — `.btn { display: inline-flex }`
+   below beat it, so `#btn-ddh-reset` rendered as a normal button from page load
+   despite carrying `hidden`. That is the worst of both: sighted users could see
+   and click a "Reset match" control before any match existed, while `hidden`
+   implies aria-hidden, so assistive tech could never reach it even after the
+   match was over. Restore the attribute's meaning globally rather than patching
+   one selector, so the next `hidden` element does not inherit the same trap. */
+[hidden] {
+  display: none !important;
+}
+
 /* ── Theme variables ───────────────────────────────────────────────── */
 
 [data-theme='dark'] {
