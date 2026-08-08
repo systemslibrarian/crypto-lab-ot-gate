@@ -1311,12 +1311,25 @@ td { color: var(--text); }
   border-radius: 8px;
   border: 2px solid var(--success);
   background: color-mix(in srgb, var(--success) 12%, var(--surface));
-  animation: reconcileMeet 0.5s ease-out;
+  /* No animation here by default. `reconcileMeet` ramps `opacity: 0.4 -> 1`,
+     and this panel's three labels are the only text on the page that measured
+     below AA — intermittently, roughly one run in four, because a scan landing
+     inside the ramp reads all three at 40% opacity at once. Under reduced
+     motion a 0.01ms duration still renders one frame of the `from` state, so
+     shortening it does not remove the exposure. Scoping the animation to
+     `no-preference` means the preference gets no fade at all and there is no
+     partial-opacity frame to sample. */
 }
 .reconcile-meet.nomatch .reconcile-shared {
   border-color: var(--hidden);
   background: color-mix(in srgb, var(--hidden) 12%, var(--surface));
 }
+@media (prefers-reduced-motion: no-preference) {
+  .reconcile-meet {
+    animation: reconcileMeet 0.5s ease-out;
+  }
+}
+
 .reconcile-badge {
   font-weight: 700;
   font-size: 0.8rem;
