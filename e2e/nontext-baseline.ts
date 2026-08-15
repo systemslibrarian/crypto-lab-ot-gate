@@ -22,7 +22,6 @@ export const NONTEXT_BASELINE: Record<
   "control-boundary|button#btn-ddh-auto.btn": { ratio: 1.23, required: 3.0, unverified: false },
   "control-boundary|button#btn-ddh-reset.btn": { ratio: 1.23, required: 3.0, unverified: false },
   "control-boundary|button#btn-ddh.btn": { ratio: 1.23, required: 3.0, unverified: false },
-  "control-boundary|button#cl-theme-toggle.cl-btn.cl-icon": { ratio: 1.38, required: 3.0, unverified: false },
   "control-boundary|button.copy-btn": { ratio: 1.14, required: 3.0, unverified: false },
   "control-boundary|button.ddh-point": { ratio: 1.23, required: 3.0, unverified: false }
 };
