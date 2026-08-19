@@ -31,30 +31,6 @@ function delay(ms: number): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  Theme toggle
-// ═══════════════════════════════════════════════════════════════════════
-
-function setupThemeToggle(): void {
-  const btn = $('#theme-toggle') as HTMLButtonElement;
-  const update = (): void => {
-    const theme = document.documentElement.getAttribute('data-theme');
-    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
-    btn.setAttribute(
-      'aria-label',
-      theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
-    );
-  };
-  btn.addEventListener('click', () => {
-    const cur = document.documentElement.getAttribute('data-theme');
-    const next = cur === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
-    update();
-  });
-  update();
-}
-
-// ═══════════════════════════════════════════════════════════════════════
 //  HTML sections
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -72,8 +48,7 @@ function header(): string {
         <p class="cl-hero-why-text">Oblivious transfer is complete for secure two-party computation: with it alone you can build private set intersection, secure auctions, and password checks that leak nothing. Get OT right and the whole MPC stack stands on solid ground.</p>
       </aside>
     </header>
-  </div>
-  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme" hidden aria-hidden="true"></button>`;
+  </div>`;
 }
 
 // ── Section A ────────────────────────────────────────────────────────
@@ -1143,7 +1118,6 @@ function mount(): void {
   app.innerHTML =
     '<main>' + header() + sectionA() + sectionB() + sectionC() + sectionD() + '</main>' + footer();
 
-  setupThemeToggle();
   setupCopyButtons();
 
   // B2 demo events
