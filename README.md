@@ -4,6 +4,16 @@
 
 crypto-lab-ot-gate implements 1-of-2 Oblivious Transfer using the Simplest OT protocol (Chou-Orlandi 2015) over Curve25519. A sender holds two messages M0 and M1. A receiver selects one message using a choice bit b ∈ {0,1} and receives M_b, while the sender learns nothing about b and the receiver learns nothing about M_{1-b}. The protocol uses one round of Edwards25519 Diffie-Hellman exchange followed by AES-256-GCM encryption of both messages under keys derived from the shared secrets. The two halves of the security argument are not symmetric: the sender learns nothing about the choice bit *unconditionally* (with r uniform, B is a uniform curve point either way — Chou-Orlandi, Lemma 1), while the receiver's inability to derive the other key rests on the **computational** Diffie-Hellman (CDH) assumption on Curve25519, in the random oracle model. OT is complete for two-party computation — any function computable securely by two parties can be built from OT as the sole primitive.
 
+## All-or-nothing disclosure connection
+
+[Section E](https://systemslibrarian.github.io/crypto-lab-ot-gate/#andos) links this two-message private-choice experiment to Brassard, Crépeau and Robert’s [All-or-Nothing Disclosure of Secrets](https://doi.org/10.1007/3-540-47721-7_17) (CRYPTO ’86; proceedings 1987). The historical goal is private selection of one of a sender’s secrets while protecting the others. It is distinct from an all-or-nothing transform and from mutual fair exchange.
+
+Choose one of two fictional archive capsules. The existing `runFullOT` computes fresh Edwards25519 values and AES-GCM ciphertexts; the selected message decrypts and the receiver’s key is also tried against the unselected ciphertext. The UI permits one selection per teaching session, with explicit reset. Reset creates a fresh transfer and can reveal another message; this is not an enforced payment or lifetime-access policy.
+
+This extension does not implement the original ANDOS construction or general 1-out-of-n OT. It retains the existing simplified KDF and validation limits below. Authentication rejection under one supplied key is an execution check, not a proof against all adversaries. Both parties and all secrets remain observable to the local simulator.
+
+See the [Applied Cryptography reading path](https://crypto-lab.systemslibrarian.dev/learn/applied-cryptography/) and [Fair Exchange Workshop](https://crypto-lab.systemslibrarian.dev/learn/fair-exchange/) for the related but different exchange goal.
+
 ## When to Use It
 
 - Use OT as the base primitive when building MPC protocols that evaluate arbitrary boolean or arithmetic circuits — OT extension generates the required volume of OTs efficiently.

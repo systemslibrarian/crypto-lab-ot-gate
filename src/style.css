@@ -1494,3 +1494,9 @@ td { color: var(--text); }
 
   .xref-map { grid-template-columns: 1fr; }
 }
+
+/* ANDOS controls use the same measured boundary contrast as protocol inputs. */
+#andos { scroll-margin-top: 1rem; }
+#andos .controls { display:flex; flex-wrap:wrap; gap:.7rem; margin:1rem 0; }
+#andos .btn { border-color:var(--border-strong); white-space:normal; text-align:left; }
+#andos pre { white-space:pre-wrap; overflow-wrap:anywhere; max-width:100%; }
