@@ -1,3 +1,4 @@
+import {andosSection, setupAndos} from './andos';
 import './style.css';
 import {
   senderInit,
@@ -58,6 +59,7 @@ function sectionA(): string {
   <section id="section-a" class="section" aria-labelledby="heading-a">
     <div class="container">
       <h2 id="heading-a">A. What is Oblivious Transfer?</h2>
+      <p><a href="#andos">Try the all-or-nothing disclosure exercise: choose an archive capsule →</a></p>
 
       <div class="subsection">
         <h3>A1. The Core Problem</h3>
@@ -1116,9 +1118,10 @@ function escapeHtml(s: string): string {
 function mount(): void {
   const app = $('#app');
   app.innerHTML =
-    '<main>' + header() + sectionA() + sectionB() + sectionC() + sectionD() + '</main>' + footer();
+    '<main>' + header() + sectionA() + sectionB() + sectionC() + sectionD() + andosSection() + '</main>' + footer();
 
   setupCopyButtons();
+  setupAndos();
 
   // B2 demo events
   $('#btn-sender-init').addEventListener('click', () => void onSenderInit());
