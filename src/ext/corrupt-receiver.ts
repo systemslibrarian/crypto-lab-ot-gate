@@ -6,9 +6,10 @@
  * to recover one bit of the sender's r per row. This module is imported only
  * by the learner-controlled broken-mode handler.
  */
-import type { BaseOTSetup } from './base';
+import { markBaseSetupCompromised, type BaseOTSetup } from './base';
 import {
   hashRow,
+  assertMessageBytes,
   type MaskedMessages,
   type MessagePairs,
   type ReceiverMessageState,
@@ -82,6 +83,7 @@ export async function recoverR(
   knownMessages: MessagePairs,
   options: CorruptRunOptions = {},
 ): Promise<RecoveredSecret> {
+  assertMessageBytes(knownMessages.messageBytes);
   const recovered = new Uint8Array(128);
   const bytes = new Uint8Array(16);
   for (let j = 0; j < 128; j += 1) {
@@ -94,8 +96,8 @@ export async function recoverR(
     const u = rowAt(receiver.uRows, j);
     const uXorEj = u.slice();
     uXorEj[j >>> 3] ^= 1 << (7 - (j & 7));
-    const zeroCandidate = hashRow(j + 1, 1, u);
-    const oneCandidate = hashRow(j + 1, 1, uXorEj);
+    const zeroCandidate = hashRow(receiver.firstIndex + j, 1, u);
+    const oneCandidate = hashRow(receiver.firstIndex + j, 1, uXorEj);
     const matchedZero = equalPrefix(knownMask, zeroCandidate, knownMessages.messageBytes);
     const matchedOne = equalPrefix(knownMask, oneCandidate, knownMessages.messageBytes);
     if (matchedZero === matchedOne) {
@@ -118,6 +120,7 @@ export async function decryptBoth(
   messages: MessagePairs,
   options: RunOptions = {},
 ): Promise<number> {
+  assertMessageBytes(messages.messageBytes);
   let both = 0;
   for (let start = 128; start < receiver.count; start += 4096) {
     if (options.signal?.aborted) throw new DOMException('OT extension cancelled', 'AbortError');
@@ -130,8 +133,8 @@ export async function decryptBoth(
       }
       const qXorR = q.slice();
       for (let b = 0; b < 16; b += 1) qXorR[b] ^= recovered.bytes[b];
-      const one = xorMessage(ciphertexts.one, hashRow(i + 1, 1, q), i, messages.messageBytes);
-      const two = xorMessage(ciphertexts.two, hashRow(i + 1, 2, qXorR), i, messages.messageBytes);
+      const one = xorMessage(ciphertexts.one, hashRow(receiver.firstIndex + i, 1, q), i, messages.messageBytes);
+      const two = xorMessage(ciphertexts.two, hashRow(receiver.firstIndex + i, 2, qXorR), i, messages.messageBytes);
       const expectedOne = messages.one.subarray(
         i * messages.messageBytes,
         (i + 1) * messages.messageBytes,
@@ -156,6 +159,7 @@ export async function assessCorruptAttack(
   messages: MessagePairs,
   options: CorruptRunOptions = {},
 ): Promise<CorruptAttackResult> {
+  markBaseSetupCompromised(setup);
   const recovered = await recoverR(receiver, ciphertexts, messages, options);
   const recoveredExactly = equalBytes(recovered.bits, setup.senderChoiceBits);
   let knownPlaintextCorrect = 0;

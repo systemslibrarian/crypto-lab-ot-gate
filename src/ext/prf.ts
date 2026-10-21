@@ -32,13 +32,19 @@ export async function aes128Ctr(
   );
 }
 
-export async function expandColumn(keyBytes: Uint8Array, bitCount: number): Promise<Uint8Array> {
+export async function expandColumn(keyBytes: Uint8Array, bitCount: number, firstIndex = 1): Promise<Uint8Array> {
   if (!Number.isInteger(bitCount) || bitCount < 1) {
     throw new RangeError('column bit count must be a positive integer');
   }
+  if (!Number.isInteger(firstIndex) || firstIndex < 1 || (firstIndex - 1) % 128 !== 0 ||
+      firstIndex + bitCount - 1 > 0xffffffff) {
+    throw new RangeError('AES column requires a fresh, block-aligned uint32 transfer range');
+  }
+  const counter = new Uint8Array(16);
+  new DataView(counter.buffer).setUint32(12, (firstIndex - 1) / 128, false);
   return aes128Ctr(
     keyBytes,
-    new Uint8Array(16),
+    counter,
     new Uint8Array(Math.ceil(bitCount / 8)),
   );
 }

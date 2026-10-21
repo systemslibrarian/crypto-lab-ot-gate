@@ -1682,3 +1682,6 @@ td { color: var(--text); }
   .ext-counters { grid-template-columns: 1fr; }
   .ext-secret-strip { grid-template-columns: repeat(8, minmax(18px, 1fr)); }
 }
+.ext-hash-work code {
+  overflow-wrap: anywhere;
+}

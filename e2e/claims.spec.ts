@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { createHash } from 'node:crypto';
 
 /**
  * Functional gate for the claims this page makes on screen.
@@ -9,7 +10,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * truncated display string, and every comparison is between two things the page
  * itself produced — the receiver's derived key against the sender's, the
  * redacted ciphertext against the one the sender sent, the DDH scoreboard
- * against the round-by-round outcomes it was built from.
+ * against the round-by-round outcomes it was built from. The repeated-run
+ * hash also has an independent Node SHA-256 oracle over the displayed inputs.
  */
 
 const M0 = 'The treasure is buried under the oak tree';
@@ -655,4 +657,78 @@ test('cancelling a 100,000-transfer run clears partial counters and leaves no st
   await expect(page.locator('#ext-verdict')).toBeHidden();
   await expect(page.locator('#ext-online-count')).toHaveText('—');
   await expect(page.locator('#ext-check')).toBeDisabled();
+});
+
+test('repeated extension runs use new PRF positions under the same base setup', async ({ page }) => {
+  await setupExtensionBase(page);
+  const secret = await page.locator('#ext-sender-r').getAttribute('data-bits');
+  await extendAndCheck(page);
+  const firstIndex = Number(await page.locator('#ext-index-range').getAttribute('data-first-index'));
+  const firstMatrix = await page.locator('.ext-matrix-cell').allTextContents();
+  await extendAndCheck(page);
+  const nextIndex = Number(await page.locator('#ext-index-range').getAttribute('data-first-index'));
+  expect(nextIndex).toBeGreaterThan(firstIndex + 999);
+  expect(await page.locator('#ext-sender-r').getAttribute('data-bits')).toBe(secret);
+  const nextMatrix = await page.locator('.ext-matrix-cell').allTextContents();
+  // Extract only the public p bit. Keeping choices and base keys unchanged
+  // formerly repeated every p bit; changing the printed index alone is insufficient.
+  expect(nextMatrix.map((cell) => cell[2]).join('')).not.toBe(firstMatrix.map((cell) => cell[2]).join(''));
+  await expect(page.locator('#ext-correct-count')).toHaveText('1,000');
+});
+
+test('the repeated-run hash is independently derived from its displayed global index and row', async ({ page }) => {
+  await setupExtensionBase(page);
+  await extendAndCheck(page);
+  await extendAndCheck(page);
+  await page.locator('.ext-hash-work summary').click();
+  const index = Number(await page.locator('#ext-hash-index').textContent());
+  const choice = Number(await page.locator('#ext-hash-choice').textContent());
+  const row = Buffer.from((await page.locator('#ext-hash-u').textContent())!, 'hex');
+  expect(index).toBeGreaterThan(1000);
+  expect(row).toHaveLength(16);
+  const prefix = Buffer.alloc(5);
+  prefix.writeUInt32BE(index, 0);
+  prefix[4] = choice;
+  const expected = createHash('sha256').update(prefix).update(row).digest('hex');
+  expect((await page.locator('#ext-hash-receiver').textContent())?.trim()).toBe(expected);
+  expect((await page.locator('#ext-hash-sender').textContent())?.trim()).toBe(expected);
+});
+
+test('malicious probe choices are fixed and match the rows the page computes', async ({ page }) => {
+  await setupExtensionBase(page);
+  await page.locator('#ext-malicious').check();
+  for (const button of await page.locator('.ext-choice-bit').all()) {
+    await expect(button).toBeDisabled();
+    await expect(button.locator('.ext-choice-value')).toHaveText('1');
+  }
+  // Changing N and rebuilding the base setup must retain the fixed probe values.
+  await page.locator('input[name="ext-count"][value="10000"]').check();
+  await page.locator('#ext-base').click();
+  await expect(page.locator('#ext-base-count')).toHaveText('128');
+  await expect(page.locator('.ext-choice-value')).toHaveText(Array(16).fill('1'));
+  await page.locator('#ext-extend').click();
+  await expect(page.locator('#ext-check')).toBeEnabled({ timeout: 60_000 });
+  const rows = await page.locator('.ext-matrix-table tbody th small').allTextContents();
+  expect(rows).toEqual(Array(16).fill('s=1'));
+});
+
+test('returning from malicious mode discards the compromised base setup before an honest run', async ({ page }) => {
+  await setupExtensionBase(page);
+  const oldSecret = await page.locator('#ext-sender-r').getAttribute('data-bits');
+  await page.locator('#ext-malicious').check();
+  await extendAndCheck(page);
+  await expect(page.locator('#ext-both-count')).toHaveText('872');
+  await expect(page.locator('#ext-extend')).toBeDisabled();
+  await page.locator('#ext-malicious').uncheck();
+  await expect(page.locator('#ext-verdict')).toBeHidden();
+  await expect(page.locator('#ext-base-count')).toHaveText('—');
+  expect(await page.locator('#ext-sender-r').getAttribute('data-bits')).toBeNull();
+  await expect(page.locator('#ext-extend')).toBeDisabled();
+  await expect(page.locator('#ext-status')).toContainText('fresh base setup');
+  await page.locator('#ext-base').click();
+  await expect(page.locator('#ext-base-count')).toHaveText('128');
+  expect(await page.locator('#ext-sender-r').getAttribute('data-bits')).not.toBe(oldSecret);
+  await extendAndCheck(page);
+  await expect(page.locator('#ext-verdict')).toHaveClass(/success/);
+  await expect(page.locator('#ext-correct-count')).toHaveText('1,000');
 });

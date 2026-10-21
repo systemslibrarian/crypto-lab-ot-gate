@@ -374,6 +374,9 @@ export async function driveAllStates(
   await expect(page.locator('#ext-verdict')).toBeVisible({ timeout: 60_000 });
   await expect(page.locator('#ext-verdict')).toHaveClass(/success/);
   await scan(page, `${label} / honest OT extension verified`);
+  await page.locator('.ext-hash-work summary').click();
+  await expect(page.locator('#ext-hash-receiver')).toBeVisible();
+  await scan(page, `${label} / full extension hash disclosure`);
 
   await page.locator('#ext-malicious').check();
   await expect(page.locator('#ext-verdict')).toBeHidden();
@@ -383,4 +386,8 @@ export async function driveAllStates(
   await expect(page.locator('#ext-r-verdict')).toBeVisible({ timeout: 60_000 });
   await expect(page.locator('#ext-both-verdict')).toBeVisible();
   await scan(page, `${label} / corrupt receiver alarm`);
+  await page.locator('#ext-malicious').uncheck();
+  await expect(page.locator('#ext-extend')).toBeDisabled();
+  await expect(page.locator('#ext-base-count')).toHaveText('—');
+  await scan(page, `${label} / compromised base setup discarded`);
 }

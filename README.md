@@ -6,6 +6,14 @@ crypto-lab-ot-gate implements 1-of-2 Oblivious Transfer using the Simplest OT pr
 
 The lab now also runs IKNP-style OT extension as presented in [Boneh–Shoup v0.6 §23.7](https://crypto.stanford.edu/~dabo/cryptobook/BonehShoup_0_6.pdf) on top of its Chou–Orlandi base OTs: 128 reversed-role public-key OTs become N measured transfers using AES-128-CTR, SHA-256, and XOR. This construction is semi-honest only; the deliberately broken mode reproduces the book's corrupt-receiver attack.
 
+Each batch reserves fresh, block-aligned AES stream positions and global
+one-based hash indices under its base setup. Cancelled batches consume their
+reserved positions too. The page prints the range and exposes the first full
+hash input and output for inspection. Malicious mode fixes the probe choices at
+1 and consumes the base setup; returning to honest mode requires 128 fresh base
+OTs. The message-masking API accepts 1–32 bytes per message, bounded by its
+SHA-256 pad (the page uses 16 bytes).
+
 ## All-or-nothing disclosure connection
 
 [Section E](https://systemslibrarian.github.io/crypto-lab-ot-gate/#andos) links this two-message private-choice experiment to Brassard, Crépeau and Robert’s [All-or-Nothing Disclosure of Secrets](https://doi.org/10.1007/3-540-47721-7_17) (CRYPTO ’86; proceedings 1987). The historical goal is private selection of one of a sender’s secrets while protecting the others. It is distinct from an all-or-nothing transform and from mutual fair exchange.
@@ -87,6 +95,13 @@ round-trip; the complete toy n=4 sender-view distribution; exact recovery of
 the sender's `r` and both later messages in the corrupt-receiver fixture; and
 the 128 transcript-salted base-OT key identities.
 
+`src/ext/reuse.test.ts` covers consecutive, concurrent and cancelled batches,
+retired compromised setups, message-size boundaries and truncated buffers. It
+compares repeated-run AES expansion and global-index SHA-256 pads with independent
+Node crypto calculations. The browser claims suite checks those fresh ranges,
+independently recomputes the displayed full hash, verifies fixed probe choices,
+and requires a fresh setup after malicious mode.
+
 Two published primitive KATs are pinned: one four-block AES-128-CTR vector from
 [NIST SP 800-38A §F.5.1](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38a.pdf)
 (64 bytes, longer than one AES block), and one 1,304-bit SHA-256 long-message
@@ -96,12 +111,17 @@ known-answer vectors, so protocol correctness is tested through its algebraic
 identities and end-to-end computed outputs rather than credited to NIST.
 
 ```bash
-npm test          # Vitest unit/property tests (crypto correctness + privacy)
-npm run test:a11y # Playwright + axe-core WCAG A/AA gate (both themes)
+npm test          # Vitest crypto tests + mutation-report rejection fixtures
+npm run test:a11y # Playwright claims + WCAG A/AA gate (dark theme, desktop/320px)
+npm run test:mutations # Clean committed tree required; ten replayable source mutations
 ```
 
-CI runs `npm test` on every push (it is a required gate, not `--if-present`), so
-a regression that broke recovery of M_b or leaked M_{1-b} would fail the build.
+CI requires unit tests, the browser/accessibility suite and the mutation gate
+before publishing. Each mutation must compile, change the JavaScript bundle,
+fail its exact owning assertion with retries disabled, then restore the original
+bundle hash and a green owning test. Missing tests, browser/startup failures,
+signals and runner errors are rejected. Node regression fixtures exercise those
+rejections; any nonzero exit alone is insufficient.
 
 ## How to Run Locally
 

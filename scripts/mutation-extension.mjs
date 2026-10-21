@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { assertNormalExit, validateNamedRun } from './mutation-report.mjs';
 
 const mutations = [
   {
@@ -24,8 +25,8 @@ const mutations = [
     id: 'swap-hash-branch',
     verdict: 'wrong-message rejection',
     file: 'src/ext/iknp.ts',
-    from: 'y2.set(hashRow(i + 1, 2, qXorR), i * 32);',
-    to: 'y2.set(hashRow(i + 1, 1, qXorR), i * 32);',
+    from: 'y2.set(hashRow(receiver.firstIndex + i, 2, qXorR), i * 32);',
+    to: 'y2.set(hashRow(receiver.firstIndex + i, 1, qXorR), i * 32);',
     test: 'hash branch domain separation keeps both receiver choices correct',
   },
   {
@@ -44,21 +45,59 @@ const mutations = [
     to: 'recovered[j] = matchedOne ? 0 : 1;',
     test: 'corrupt receiver fixture keeps chosen checks green while recovering r and both later messages',
   },
+  {
+    id: 'repeat-aes-stream',
+    verdict: 'fresh PRF positions across runs',
+    file: 'src/ext/prf.ts',
+    from: 'setUint32(12, (firstIndex - 1) / 128, false)',
+    to: 'setUint32(12, 0, false)',
+    test: 'repeated extension runs use new PRF positions under the same base setup',
+  },
+  {
+    id: 'restart-hash-index',
+    verdict: 'independent global-index hash calculation',
+    file: 'src/ext/iknp.ts',
+    from: 'writeIndex(encoded, index);',
+    to: 'writeIndex(encoded, 1);',
+    test: 'the repeated-run hash is independently derived from its displayed global index and row',
+  },
+  {
+    id: 'misdisplay-probe-choices',
+    verdict: 'displayed choices match fixed probes',
+    file: 'src/ui-ext.ts',
+    from: "brokenMode = (event.currentTarget as HTMLInputElement).checked;\n    choices = randomChoices(transferCount);\n    if (brokenMode) choices.fill(1, 0, 128);",
+    to: "brokenMode = (event.currentTarget as HTMLInputElement).checked;\n    choices = randomChoices(transferCount);\n    if (brokenMode) choices.fill(2, 0, 128);",
+    test: 'malicious probe choices are fixed and match the rows the page computes',
+  },
+  {
+    id: 'retain-compromised-setup',
+    verdict: 'discard base secrets after the attack',
+    file: 'src/ui-ext.ts',
+    from: 'if (!brokenMode) discardBaseSetup();',
+    to: 'if (!brokenMode && false) discardBaseSetup();',
+    test: 'returning from malicious mode discards the compromised base setup before an honest run',
+  },
+  {
+    id: 'delete-negative-claim',
+    verdict: 'visible malicious-security limitation',
+    file: 'src/ui-ext.ts',
+    from: "This OT extension is secure only against honest-but-curious parties: a receiver who deviates learns the sender's secret r, and with it both messages of every later transfer.",
+    to: '',
+    test: 'corrupt receiver fixture keeps chosen checks green while recovering r and both later messages',
+  },
 ];
 
-function command(file, args, expectSuccess = true) {
+function run(file, args) {
   const result = spawnSync(file, args, {
     cwd: process.cwd(),
-    env: { ...process.env, CI: '1' },
+    env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
     encoding: 'utf8',
     stdio: 'pipe',
+    timeout: 180_000,
+    maxBuffer: 16 * 1024 * 1024,
   });
-  const succeeded = result.status === 0;
-  if (succeeded !== expectSuccess) {
-    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim();
-    throw new Error(`${file} ${args.join(' ')} ${expectSuccess ? 'failed' : 'unexpectedly passed'}\n${output}`);
-  }
-  return `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  assertNormalExit(result, `${file} ${args.join(' ')}`);
+  return result;
 }
 
 function filesUnder(path) {
@@ -72,7 +111,7 @@ function filesUnder(path) {
 
 function bundleHash() {
   const hash = createHash('sha256');
-  for (const file of filesUnder('dist')) {
+  for (const file of filesUnder('dist').filter((path) => path.endsWith('.js'))) {
     hash.update(file);
     hash.update(readFileSync(file));
   }
@@ -80,24 +119,30 @@ function bundleHash() {
 }
 
 function build() {
-  command('npm', ['run', 'build']);
+  const result = run('npm', ['run', 'build']);
+  if (result.status !== 0) throw new Error(`build failed; this is not a mutation kill\n${result.stdout}\n${result.stderr}`);
   return bundleHash();
 }
 
 function namedTest(name, expectSuccess) {
-  return command(
+  const result = run(
     'npx',
     [
       'playwright',
       'test',
       'e2e/claims.spec.ts',
       '--grep',
-      name,
+      `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
       '--retries=0',
       '--workers=1',
+      '--reporter=json',
     ],
-    expectSuccess,
   );
+  try {
+    validateNamedRun(result, name, expectSuccess);
+  } catch (error) {
+    throw new Error(`${error.message}\n${result.stdout}\n${result.stderr}`);
+  }
 }
 
 const initialStatus = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' });
@@ -111,11 +156,10 @@ for (const mutation of mutations) {
     throw new Error(`${mutation.id}: mutation target must occur exactly once`);
   }
   process.stdout.write(`\nMUTATION ${mutation.id} — ${mutation.verdict}\n`);
+  const baselineHash = build();
+  namedTest(mutation.test, true);
+  process.stdout.write(`1 baseline passes — ${mutation.test}\n`);
   try {
-    const baselineHash = build();
-    namedTest(mutation.test, true);
-    process.stdout.write(`1 baseline passes — ${mutation.test}\n`);
-
     writeFileSync(mutation.file, original.replace(mutation.from, mutation.to));
     const diff = execFileSync('git', ['diff', '--', mutation.file], { encoding: 'utf8' });
     if (diff.trim() === '') throw new Error(`${mutation.id}: source diff was empty`);
@@ -129,13 +173,14 @@ for (const mutation of mutations) {
     process.stdout.write(`4 named test RED (--retries=0) — ${mutation.test}\n`);
   } finally {
     writeFileSync(mutation.file, original);
+    const restoredHash = build();
+    if (restoredHash !== baselineHash) throw new Error(`${mutation.id}: restored bundle differs from baseline`);
+    namedTest(mutation.test, true);
+    if (execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }) !== '') {
+      throw new Error(`${mutation.id}: restore did not return to the committed tree`);
+    }
+    process.stdout.write(`5 restored, original bundle hash and GREEN — ${mutation.test}\n`);
   }
-  build();
-  namedTest(mutation.test, true);
-  if (execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }) !== '') {
-    throw new Error(`${mutation.id}: restore did not return to the committed tree`);
-  }
-  process.stdout.write(`5 restored and GREEN — ${mutation.test}\n`);
 }
 
 process.stdout.write(`\nSUMMARY ${mutations.length} of ${mutations.length} mutations killed\n`);

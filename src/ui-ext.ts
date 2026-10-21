@@ -1,4 +1,4 @@
-import { setupBaseOTs, type BaseOTSetup } from './ext/base';
+import { isBaseSetupCompromised, markBaseSetupCompromised, setupBaseOTs, type BaseOTSetup } from './ext/base';
 import {
   assessCorruptAttack,
   makeCorruptReceiverState,
@@ -60,7 +60,7 @@ function renderChoiceButtons(): void {
   const target = el('#ext-choice-preview');
   target.innerHTML = Array.from({ length: 16 }, (_, i) => {
     const choice = choices[i] || 1;
-    return `<button class="ext-choice-bit" type="button" data-index="${i}" aria-pressed="${choice === 2}" ${baseSetup ? '' : 'disabled'}><span class="ext-choice-index">${i + 1}</span><span class="ext-choice-value">${choice}</span></button>`;
+    return `<button class="ext-choice-bit" type="button" data-index="${i}" aria-pressed="${choice === 2}" ${baseSetup && !brokenMode ? '' : 'disabled'}><span class="ext-choice-index">${i + 1}</span><span class="ext-choice-value">${choice}</span></button>`;
   }).join('');
 }
 
@@ -129,6 +129,8 @@ function clearOnlineResult(): void {
   el('#ext-online-ms').textContent = '—';
   el('#ext-online-bytes').textContent = '—';
   el('#ext-hash-calls').textContent = '—';
+  el('#ext-index-range').textContent = '—';
+  el('#ext-index-range').removeAttribute('data-first-index');
   el('#ext-matrix').innerHTML = '<p class="ext-placeholder">Run the extension to draw the first 16 rows and columns.</p>';
   el('#ext-comparison').hidden = true;
   el<HTMLButtonElement>('#ext-check').disabled = true;
@@ -144,8 +146,14 @@ function retireResult(message: string): void {
 }
 
 function setRunning(running: boolean): void {
+  const compromised = baseSetup !== null && isBaseSetupCompromised(baseSetup);
   el<HTMLButtonElement>('#ext-base').disabled = running;
-  el<HTMLButtonElement>('#ext-extend').disabled = running || !baseSetup;
+  el<HTMLButtonElement>('#ext-extend').disabled = running || !baseSetup || compromised;
+  el('#ext-extend-reason').textContent = !baseSetup
+    ? 'Run step 1 first; extension cannot proceed without the 128 base correlations.'
+    : compromised
+      ? 'The malicious receiver used this setup. Run step 1 for fresh base OTs before another extension.'
+      : 'Ready: each run uses fresh AES stream positions and hash indices; cancelled ranges are never reused.';
   el<HTMLButtonElement>('#ext-check').disabled = running || !pending;
   el<HTMLButtonElement>('#ext-reveal-r').disabled = running || !baseSetup;
   el<HTMLInputElement>('#ext-malicious').disabled = running;
@@ -153,9 +161,20 @@ function setRunning(running: boolean): void {
     radio.disabled = running;
   });
   document.querySelectorAll<HTMLButtonElement>('.ext-choice-bit').forEach((button) => {
-    button.disabled = running || !baseSetup;
+    button.disabled = running || !baseSetup || brokenMode;
   });
   el<HTMLButtonElement>('#ext-cancel').hidden = !running;
+}
+
+function discardBaseSetup(): void {
+  baseSetup = null;
+  revealSenderR = false;
+  for (const selector of ['#ext-base-count', '#ext-base-ms', '#ext-base-per']) el(selector).textContent = '—';
+  el('#ext-sender-r').innerHTML = '';
+  el('#ext-sender-r').removeAttribute('data-bits');
+  el('#ext-sender-r').setAttribute('aria-label', 'Sender secret r not generated');
+  el('#ext-reveal-r').textContent = 'Reveal r';
+  el('#ext-reveal-r').setAttribute('aria-pressed', 'false');
 }
 
 function cancelRun(): void {
@@ -168,7 +187,7 @@ function cancelRun(): void {
   status('Cancelled — partial counters cleared; no stale success remains.');
 }
 
-function renderMatrix(receiver: ReceiverMessageState, sender: SenderOutputState): void {
+function renderMatrix(receiver: ReceiverMessageState, sender: SenderOutputState, receiverMasks: Uint8Array): void {
   const heads = Array.from({ length: 16 }, (_, j) => `<th scope="col">j${j + 1}</th>`).join('');
   const rows = Array.from({ length: 16 }, (_, i) => {
     const u = rowAt(receiver.uRows, i);
@@ -178,15 +197,24 @@ function renderMatrix(receiver: ReceiverMessageState, sender: SenderOutputState)
     const c = receiver.choices[i] === 2 ? 1 : 0;
     const cells = Array.from({ length: 16 }, (_, j) => {
       const values = `${bitInRow(u, j)}${bitInRow(v, j)}${bitInRow(p, j)}${c}${bitInRow(q, j)}`;
-      return `<td><span class="ext-matrix-cell c-${c}" role="img" aria-label="row ${i + 1}, column ${j + 1}: u ${values[0]}, v ${values[1]}, p ${values[2]}, C ${values[3]}, q ${values[4]}">${values}</span></td>`;
+      return `<td><span class="ext-matrix-cell c-${c}" role="img" aria-label="transfer ${receiver.firstIndex + i}, column ${j + 1}: u ${values[0]}, v ${values[1]}, p ${values[2]}, C ${values[3]}, q ${values[4]}">${values}</span></td>`;
     }).join('');
-    return `<tr><th scope="row">i${i + 1}<small>s=${receiver.choices[i]}</small></th>${cells}</tr>`;
+    return `<tr><th scope="row">i${receiver.firstIndex + i}<small>s=${receiver.choices[i]}</small></th>${cells}</tr>`;
   }).join('');
+  const hex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const chosenPad = receiver.choices[0] === 1 ? sender.y1 : sender.y2;
   el('#ext-matrix').innerHTML = `
-    <p class="ext-matrix-key"><strong>Each cell:</strong> u · v · p · C[s] · q. For s=1, q lines up with u; for s=2, q lines up with u xor r.</p>
+    <p class="ext-matrix-key"><strong>Each cell:</strong> u · v · p · C[s] · q. ${brokenMode ? 'These probe rows deliberately deviate: q differs from u in coordinate j when sender bit r_j is 1.' : 'For s=1, q lines up with u; for s=2, q lines up with u xor r.'}</p>
     <div class="ext-matrix-scroll" tabindex="0" role="region" aria-label="First 16 by 16 OT extension matrix window, scrollable">
       <table class="ext-matrix-table"><thead><tr><th scope="col">row</th>${heads}</tr></thead><tbody>${rows}</tbody></table>
-    </div>`;
+    </div>
+    ${brokenMode ? '' : `<details class="ext-hash-work"><summary>Inspect the first transfer's hash</summary>
+      <p>SHA-256(uint32 big-endian index ‖ one-byte choice ‖ 16-byte u row). The index advances across runs.</p>
+      <p>Index: <code id="ext-hash-index">${receiver.firstIndex}</code> · Choice: <code id="ext-hash-choice">${receiver.choices[0]}</code></p>
+      <p>u: <code id="ext-hash-u">${hex(rowAt(receiver.uRows, 0))}</code></p>
+      <p>Receiver pad: <code id="ext-hash-receiver">${hex(receiverMasks.subarray(0, 32))}</code></p>
+      <p>Sender's selected pad: <code id="ext-hash-sender">${hex(chosenPad.subarray(0, 32))}</code></p>
+    </details>`}`;
 }
 
 function renderMetrics(run: PendingRun): void {
@@ -197,6 +225,8 @@ function renderMetrics(run: PendingRun): void {
   el('#ext-online-ms').textContent = run.elapsedMs.toFixed(3);
   el('#ext-online-bytes').textContent = number.format(transferCount * 16);
   el('#ext-hash-calls').textContent = number.format(transferCount * 3);
+  el('#ext-index-range').textContent = `${number.format(run.receiver.firstIndex)}–${number.format(run.receiver.firstIndex + run.receiver.count - 1)}`;
+  el('#ext-index-range').dataset.firstIndex = String(run.receiver.firstIndex);
   el('#ext-measured-base-rate').textContent = perBasePrinted.toFixed(6);
   el('#ext-measured-extension').textContent = run.elapsedMs.toFixed(3);
   const projectionEl = el('#ext-projection');
@@ -214,6 +244,7 @@ async function runBaseSetup(): Promise<void> {
   }
   const replacedSetup = baseSetup !== null;
   if (replacedSetup) retireResult('Previous extension verdict retired: a fresh base setup was requested.');
+  discardBaseSetup();
   setError('');
   const token = ++generation;
   setRunning(true);
@@ -224,13 +255,13 @@ async function runBaseSetup(): Promise<void> {
     baseSetup = next;
     revealSenderR = false;
     choices = randomChoices(transferCount);
+    if (brokenMode) choices.fill(1, 0, 128);
     renderChoiceButtons();
     renderSenderSecret();
     el('#ext-base-count').textContent = String(next.n);
     el('#ext-base-ms').textContent = next.elapsedMs.toFixed(3);
     el('#ext-base-per').textContent = (next.elapsedMs / next.n).toFixed(6);
     el<HTMLButtonElement>('#ext-base').textContent = 'Run 128 base OTs again';
-    el('#ext-extend-reason').textContent = 'Ready: AES and SHA-256 replace further curve operations.';
     status(
       replacedSetup
         ? 'Step 1 complete — the previous extension verdict was retired and 128 fresh base-OT correlations are ready.'
@@ -247,6 +278,8 @@ async function runBaseSetup(): Promise<void> {
 
 async function runExtension(): Promise<void> {
   if (!baseSetup) return;
+  const setup = baseSetup;
+  const broken = brokenMode;
   retireResult('Starting a fresh extension run…');
   setError('');
   const token = ++generation;
@@ -256,15 +289,17 @@ async function runExtension(): Promise<void> {
   const started = performance.now();
   try {
     const runChoices = choices.slice();
-    if (brokenMode) runChoices.fill(1, 0, 128);
+    if (broken) runChoices.fill(1, 0, 128);
     const progress = (update: { phase: string; completed: number; total: number }) => {
       if (token === generation) {
         status(`Step 3 — ${update.phase}: ${number.format(update.completed)} / ${number.format(update.total)}`);
       }
     };
-    const honestReceiver = await receiverMessage(baseSetup, runChoices, { signal, onProgress: progress });
-    const receiver = brokenMode ? makeCorruptReceiverState(honestReceiver) : honestReceiver;
-    const sender = await senderOutputs(baseSetup, receiver, { signal, onProgress: progress });
+    const honestReceiver = await receiverMessage(setup, runChoices, { signal, onProgress: progress });
+    if (token !== generation) return;
+    const receiver = broken ? makeCorruptReceiverState(honestReceiver) : honestReceiver;
+    if (broken) markBaseSetupCompromised(setup);
+    const sender = await senderOutputs(setup, receiver, { signal, onProgress: progress });
     const messages = createMessagePairs(transferCount);
     const ciphertexts = maskMessages(messages, sender);
     const receiverMasks = await receiverOutputs(receiver, { signal, onProgress: progress });
@@ -276,9 +311,9 @@ async function runExtension(): Promise<void> {
       ciphertexts,
       receiverMasks,
       elapsedMs: performance.now() - started,
-      broken: brokenMode,
+      broken,
     };
-    renderMatrix(receiver, sender);
+    renderMatrix(receiver, sender, receiverMasks);
     renderMetrics(pending);
     status(`Step 3 complete — ${number.format(transferCount)} real extended transfers are ready to check.`);
   } catch (error) {
@@ -363,7 +398,9 @@ async function checkRun(): Promise<void> {
       el('#ext-both-count').textContent = number.format(attack.bothMessagesRecoveredCount);
       showVerdict(
         '#ext-verdict',
-        "ALL N TRANSFERS CORRECT — AND THE SENDER'S SECRET r RECOVERED",
+        attack.chosenCorrectCount === run.receiver.count && attack.recoveredExactly
+          ? "ALL N TRANSFERS CORRECT — AND THE SENDER'S SECRET r RECOVERED"
+          : `✗ ${number.format(attack.chosenCorrectCount)} / ${number.format(run.receiver.count)} CHOSEN MESSAGES CORRECT; SENDER SECRET ${attack.recoveredExactly ? 'RECOVERED' : 'NOT RECOVERED'}`,
         attack.chosenCorrectCount === run.receiver.count && attack.recoveredExactly ? 'alarm' : 'failure',
       );
       if (attack.chosenCorrectCount === run.receiver.count && attack.recoveredExactly) {
@@ -443,7 +480,7 @@ export function extensionPanel(): string {
           <label><input type="radio" name="ext-count" value="10000"> 10,000</label>
           <label><input type="radio" name="ext-count" value="100000"> 100,000</label>
         </fieldset>
-        <p>First 16 receiver choices (press a cell to switch 1 ↔ 2):</p>
+        <p>First 16 receiver choices (press a cell to switch 1 ↔ 2). In malicious mode these are probe slots fixed at 1.</p>
         <div id="ext-choice-preview" class="ext-choice-preview" tabindex="0" role="group" aria-label="First 16 receiver choices"></div>
       </section>
 
@@ -456,6 +493,7 @@ export function extensionPanel(): string {
           <div><dt>Measured online time (ms)</dt><dd id="ext-online-ms">—</dd></div>
           <div><dt>Online message bytes</dt><dd id="ext-online-bytes">—</dd></div>
           <div><dt>Protocol hash calls</dt><dd id="ext-hash-calls">—</dd></div>
+          <div><dt>Fresh transfer indices</dt><dd id="ext-index-range">—</dd></div>
         </dl>
         <div id="ext-matrix" class="ext-matrix"><p class="ext-placeholder">Run the extension to draw the first 16 rows and columns.</p></div>
       </section>
@@ -524,7 +562,7 @@ export function setupExtension(): void {
 
   el('#ext-choice-preview').addEventListener('click', (event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('.ext-choice-bit');
-    if (!button || !baseSetup) return;
+    if (!button || !baseSetup || brokenMode) return;
     const index = Number(button.dataset.index);
     choices[index] = choices[index] === 1 ? 2 : 1;
     retireResult(`Previous verdict retired: receiver choice ${index + 1} changed.`);
@@ -538,6 +576,7 @@ export function setupExtension(): void {
       if (next === transferCount) return;
       transferCount = next;
       choices = randomChoices(transferCount);
+      if (brokenMode) choices.fill(1, 0, 128);
       retireResult(`Previous verdict retired: N changed to ${number.format(transferCount)}.`);
       renderChoiceButtons();
       setRunning(false);
@@ -548,11 +587,12 @@ export function setupExtension(): void {
     brokenMode = (event.currentTarget as HTMLInputElement).checked;
     choices = randomChoices(transferCount);
     if (brokenMode) choices.fill(1, 0, 128);
+    if (!brokenMode) discardBaseSetup();
     el('#ext-malicious-copy').hidden = !brokenMode;
     retireResult(
       brokenMode
         ? 'Honest verdict retired. Deliberately broken receiver mode is armed; press Extend to run it.'
-        : 'Broken-mode verdict retired. Honest receiver mode restored.',
+        : 'Broken-mode verdict retired. Honest receiver mode restored; run step 1 for a fresh base setup.',
     );
     renderChoiceButtons();
     setRunning(false);

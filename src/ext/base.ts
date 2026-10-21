@@ -27,6 +27,32 @@ export interface BaseOTSetup {
   elapsedMs: number;
 }
 
+// A setup can serve many batches, but never the same PRF/hash positions twice.
+// Keep reservations outside the displayed key material; a cancelled batch also
+// consumes its range. Both parties are simulated against this same setup object.
+const uses = new WeakMap<BaseOTSetup, { nextIndex: number; compromised: boolean }>();
+
+export function reserveTransferRange(setup: BaseOTSetup, count: number): number {
+  const state = uses.get(setup);
+  if (!state || state.compromised) throw new Error('Base setup is unavailable or compromised; run 128 fresh base OTs.');
+  if (!Number.isInteger(count) || count < 1 || count > 100_000) throw new RangeError('invalid batch size');
+  const firstIndex = state.nextIndex;
+  if (firstIndex + count - 1 > 0xffffffff) throw new RangeError('Transfer indices exhausted; run fresh base OTs.');
+  // Start on an AES block boundary. Unused padding bits are burned, not reused.
+  state.nextIndex = firstIndex + Math.ceil(count / 128) * 128;
+  return firstIndex;
+}
+
+export function markBaseSetupCompromised(setup: BaseOTSetup): void {
+  const state = uses.get(setup);
+  if (!state) throw new Error('Unknown base setup');
+  state.compromised = true;
+}
+
+export function isBaseSetupCompromised(setup: BaseOTSetup): boolean {
+  return uses.get(setup)?.compromised ?? true;
+}
+
 function concatBytes(...parts: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   let offset = 0;
@@ -107,7 +133,7 @@ export async function setupBaseOTs(n = 128): Promise<BaseOTSetup> {
     }
   }
 
-  return {
+  const setup: BaseOTSetup = {
     n,
     receiverKeyPairs,
     senderChoiceBits,
@@ -115,4 +141,6 @@ export async function setupBaseOTs(n = 128): Promise<BaseOTSetup> {
     senderChoiceBytes: packChoiceBits(senderChoiceBits),
     elapsedMs: performance.now() - started,
   };
+  uses.set(setup, { nextIndex: 1, compromised: false });
+  return setup;
 }

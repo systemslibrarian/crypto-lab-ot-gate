@@ -4,7 +4,7 @@
  * only AES-CTR (WebCrypto) and SHA-256 (@noble/hashes) are delegated.
  */
 import { sha256 } from '@noble/hashes/sha2.js';
-import type { BaseOTSetup } from './base';
+import { reserveTransferRange, type BaseOTSetup } from './base';
 import { expandColumn } from './prf';
 import { rowAt, transposeColumnsChunked } from './transpose';
 
@@ -25,6 +25,8 @@ export interface RunOptions {
 }
 
 export interface ReceiverMessageState {
+  /** Global one-based PRF/hash index; never restarted under the same base keys. */
+  firstIndex: number;
   count: number;
   rowBytes: number;
   choices: Uint8Array;
@@ -88,6 +90,7 @@ function writeIndex(out: Uint8Array, index: number): void {
 
 /** H_{i,a}(x) = SHA-256(uint32be(i) || uint8(a) || x), with i one-based. */
 export function hashRow(index: number, branch: 1 | 2, row: Uint8Array): Uint8Array {
+  if (!Number.isInteger(index) || index < 1 || index > 0xffffffff) throw new RangeError('hash index must be uint32 and one-based');
   if (row.length !== ROW_BYTES) throw new RangeError('hash row must be 16 bytes');
   const encoded = new Uint8Array(4 + 1 + ROW_BYTES);
   writeIndex(encoded, index);
@@ -111,6 +114,7 @@ export function randomChoices(count: number): Uint8Array {
 
 export function createMessagePairs(count: number, messageBytes = MESSAGE_BYTES): MessagePairs {
   assertAllowedCount(count);
+  assertMessageBytes(messageBytes);
   const one = new Uint8Array(count * messageBytes);
   const two = new Uint8Array(count * messageBytes);
   for (let i = 0; i < count; i += 1) {
@@ -148,11 +152,12 @@ export async function receiverMessage(
     throw new RangeError('every receiver choice must be 1 or 2');
   }
   checkAbort(options.signal);
+  const firstIndex = reserveTransferRange(setup, choices.length);
   options.onProgress?.({ phase: 'receiver AES columns', completed: 0, total: 256 });
   const expanded = await Promise.all(
     setup.receiverKeyPairs.flatMap((pair) => [
-      expandColumn(pair.zero, choices.length),
-      expandColumn(pair.one, choices.length),
+      expandColumn(pair.zero, choices.length, firstIndex),
+      expandColumn(pair.one, choices.length, firstIndex),
     ]),
   );
   checkAbort(options.signal);
@@ -175,7 +180,7 @@ export async function receiverMessage(
     }
     await yieldChunk(options, 'receiver message p', end, choices.length);
   }
-  return { count: choices.length, rowBytes: ROW_BYTES, choices, uRows, vRows, pRows };
+  return { firstIndex, count: choices.length, rowBytes: ROW_BYTES, choices: choices.slice(), uRows, vRows, pRows };
 }
 
 export async function senderOutputs(
@@ -186,7 +191,7 @@ export async function senderOutputs(
   checkAbort(options.signal);
   options.onProgress?.({ phase: 'sender AES columns', completed: 0, total: 128 });
   const columns = await Promise.all(
-    setup.senderChosenKeys.map((key) => expandColumn(key, receiver.count)),
+    setup.senderChosenKeys.map((key) => expandColumn(key, receiver.count, receiver.firstIndex)),
   );
   const selectedRows = await transposeColumnsChunked(columns, receiver.count, {
     signal: options.signal,
@@ -207,8 +212,8 @@ export async function senderOutputs(
       }
       const qXorR = new Uint8Array(ROW_BYTES);
       for (let b = 0; b < ROW_BYTES; b += 1) qXorR[b] = q[b] ^ setup.senderChoiceBytes[b];
-      y1.set(hashRow(i + 1, 1, q), i * 32);
-      y2.set(hashRow(i + 1, 2, qXorR), i * 32);
+      y1.set(hashRow(receiver.firstIndex + i, 1, q), i * 32);
+      y2.set(hashRow(receiver.firstIndex + i, 2, qXorR), i * 32);
     }
     await yieldChunk(options, 'sender hashes', end, receiver.count);
   }
@@ -224,7 +229,7 @@ export async function receiverOutputs(
     const end = Math.min(receiver.count, start + WORK_CHUNK);
     for (let i = start; i < end; i += 1) {
       output.set(
-        hashRow(i + 1, receiver.choices[i] as 1 | 2, rowAt(receiver.uRows, i)),
+        hashRow(receiver.firstIndex + i, receiver.choices[i] as 1 | 2, rowAt(receiver.uRows, i)),
         i * 32,
       );
     }
@@ -233,7 +238,20 @@ export async function receiverOutputs(
   return output;
 }
 
+export function assertMessageBytes(messageBytes: number): void {
+  if (!Number.isInteger(messageBytes) || messageBytes < 1 || messageBytes > 32) {
+    throw new RangeError('Messages must contain 1 through 32 bytes; SHA-256 supplies a 32-byte mask.');
+  }
+}
+
+function assertMessagePairs(messages: MessagePairs): void {
+  assertMessageBytes(messages.messageBytes);
+  if (messages.one.length === 0 || messages.one.length !== messages.two.length ||
+      messages.one.length % messages.messageBytes !== 0) throw new RangeError('Message pair dimensions do not match');
+}
+
 export function maskMessages(messages: MessagePairs, sender: SenderOutputState): MaskedMessages {
+  assertMessagePairs(messages);
   const count = messages.one.length / messages.messageBytes;
   if (sender.y1.length !== count * 32 || sender.y2.length !== count * 32) {
     throw new RangeError('sender masks and messages have different counts');
@@ -257,6 +275,9 @@ export function unmask(
   index: number,
   messageBytes = MESSAGE_BYTES,
 ): Uint8Array {
+  assertMessageBytes(messageBytes);
+  if (!Number.isInteger(index) || index < 0 || (index + 1) * messageBytes > ciphertext.length ||
+      (index + 1) * 32 > mask.length) throw new RangeError('Ciphertext or mask is truncated');
   const out = new Uint8Array(messageBytes);
   for (let b = 0; b < messageBytes; b += 1) {
     out[b] = ciphertext[index * messageBytes + b] ^ mask[index * 32 + b];
@@ -271,6 +292,12 @@ export async function verifyAll(
   receiverMasks: Uint8Array,
   options: RunOptions = {},
 ): Promise<VerifyResult> {
+  assertMessagePairs(messages);
+  if (messages.one.length !== receiver.count * messages.messageBytes ||
+      ciphertexts.messageBytes !== messages.messageBytes || ciphertexts.one.length !== messages.one.length ||
+      ciphertexts.two.length !== messages.two.length || receiverMasks.length !== receiver.count * 32) {
+    throw new RangeError('Verification arrays have different dimensions');
+  }
   let correctCount = 0;
   let wrongMessageRejectedCount = 0;
   for (let start = 0; start < receiver.count; start += WORK_CHUNK) {
