@@ -132,7 +132,9 @@ function namedTest(name, expectSuccess) {
       'test',
       'e2e/claims.spec.ts',
       '--grep',
-      `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+      // --grep includes the project/file prefix; the JSON validator below
+      // still requires the exact spec.title and exactly one result.
+      `${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
       '--retries=0',
       '--workers=1',
       '--reporter=json',
