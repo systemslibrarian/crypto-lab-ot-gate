@@ -557,6 +557,8 @@ test('rendered transpose keeps all 128 base coordinates aligned', async ({ page 
   await setupExtensionBase(page);
   await forceAlternatingChoices(page);
   await extendAndCheck(page);
+  await expect(page.locator('#ext-correct-count')).toHaveText('1,000');
+  await expect(page.locator('#ext-verdict')).toHaveClass(/success/);
   await expect(page.locator('#ext-wrong-count')).toHaveText('1,000');
   await expect(page.locator('#ext-wrong-verdict')).toHaveClass(/success/);
 });
