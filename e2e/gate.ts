@@ -7,7 +7,7 @@ import { NONTEXT_BASELINE } from './nontext-baseline';
 export const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
 /** A phone-width viewport, for the WCAG 1.4.10 reflow half of the gate. */
-export const NARROW = { width: 380, height: 800 };
+export const NARROW = { width: 320, height: 800 };
 
 /**
  * Shared machinery for the WCAG gate.
@@ -356,4 +356,31 @@ export async function driveAllStates(
 
   await page.locator('#btn-ddh-reset').click();
   await scan(page, `${label} / DDH reset`);
+
+  // D1 is a real two-phase protocol. Scan its setup secret, honest matrix and
+  // computed verdict, then the deliberately broken equation-23.23 fixture.
+  // This belongs in the state drive, not boot(): boot only establishes the
+  // test harness and never supplies product copy or a synthetic result.
+  await page.locator('#ext-base').click();
+  await expect(page.locator('#ext-base-count')).toHaveText('128');
+  await expect(page.locator('#ext-extend')).toBeEnabled();
+  await page.locator('#ext-reveal-r').click();
+  await scan(page, `${label} / extension base OTs`);
+
+  await page.locator('#ext-extend').click();
+  await expect(page.locator('#ext-check')).toBeEnabled({ timeout: 60_000 });
+  await expect(page.locator('.ext-matrix-cell')).toHaveCount(256);
+  await page.locator('#ext-check').click();
+  await expect(page.locator('#ext-verdict')).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#ext-verdict')).toHaveClass(/success/);
+  await scan(page, `${label} / honest OT extension verified`);
+
+  await page.locator('#ext-malicious').check();
+  await expect(page.locator('#ext-verdict')).toBeHidden();
+  await page.locator('#ext-extend').click();
+  await expect(page.locator('#ext-check')).toBeEnabled({ timeout: 60_000 });
+  await page.locator('#ext-check').click();
+  await expect(page.locator('#ext-r-verdict')).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#ext-both-verdict')).toBeVisible();
+  await scan(page, `${label} / corrupt receiver alarm`);
 }

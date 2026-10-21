@@ -4,6 +4,8 @@
 
 crypto-lab-ot-gate implements 1-of-2 Oblivious Transfer using the Simplest OT protocol (Chou-Orlandi 2015) over Curve25519. A sender holds two messages M0 and M1. A receiver selects one message using a choice bit b ∈ {0,1} and receives M_b, while the sender learns nothing about b and the receiver learns nothing about M_{1-b}. The protocol uses one round of Edwards25519 Diffie-Hellman exchange followed by AES-256-GCM encryption of both messages under keys derived from the shared secrets. The two halves of the security argument are not symmetric: the sender learns nothing about the choice bit *unconditionally* (with r uniform, B is a uniform curve point either way — Chou-Orlandi, Lemma 1), while the receiver's inability to derive the other key rests on the **computational** Diffie-Hellman (CDH) assumption on Curve25519, in the random oracle model. OT is complete for two-party computation — any function computable securely by two parties can be built from OT as the sole primitive.
 
+The lab now also runs IKNP-style OT extension as presented in [Boneh–Shoup v0.6 §23.7](https://crypto.stanford.edu/~dabo/cryptobook/BonehShoup_0_6.pdf) on top of its Chou–Orlandi base OTs: 128 reversed-role public-key OTs become N measured transfers using AES-128-CTR, SHA-256, and XOR. This construction is semi-honest only; the deliberately broken mode reproduces the book's corrupt-receiver attack.
+
 ## All-or-nothing disclosure connection
 
 [Section E](https://systemslibrarian.github.io/crypto-lab-ot-gate/#andos) links this two-message private-choice experiment to Brassard, Crépeau and Robert’s [All-or-Nothing Disclosure of Secrets](https://doi.org/10.1007/3-540-47721-7_17) (CRYPTO ’86; proceedings 1987). The historical goal is private selection of one of a sender’s secrets while protecting the others. It is distinct from an all-or-nothing transform and from mutual fair exchange.
@@ -29,11 +31,12 @@ See the [Applied Cryptography reading path](https://crypto-lab.systemslibrarian.
 
 Enter two messages as the sender and select your choice as the receiver. The demo executes the full Simplest OT protocol with real Edwards25519 Diffie-Hellman values and AES-256-GCM encryption. The privacy audit panels show exactly what each party sees, confirming that the sender cannot determine the receiver's choice and the receiver cannot decrypt the unchosen message.
 
-Three teaching visuals sit on top of the real protocol (they never fake a value):
+Four teaching visuals sit on top of the real protocol (they never fake a value):
 
 1. **Key-reconciliation panel** — after the receiver decrypts, the demo shows the two *independent* routes to the shared secret side by side: the receiver's `r·A` and the sender's `a·B` (or `a·(B−A)` when b=1). Both are computed from real curve math and shown landing on the *same* point `arG` (highlighted green), while the sender's other key lands elsewhere (red) — making the commutativity the whole protocol rests on visible instead of algebraic.
 2. **Color-coded value chips** — the sender's `k₀`/`k₁` and the receiver's derived key carry matching green/red chips so "which key equals which" reads as a diagram rather than a wall of hex.
 3. **Choice-hiding match** — the visualizer is a 10-round game with a running accuracy tally against the dashed 1-in-3 baseline, plus a "let the computer guess 1000×" button that runs 1000 real challenges and plots the measured ~33% hit rate. The inability to beat random is not a computational assumption here but a fact about the distribution — A + r·G with fresh uniform r *is* a uniform curve point — which is why choice hiding holds against an unbounded sender.
+4. **OT extension, run** — perform 128 real Chou–Orlandi base OTs, expand 1,000, 10,000, or 100,000 transfers, inspect a 16×16 matrix window, and verify every chosen and wrong-message result. The comparison uses this run's measured timings. Turning on the visibly broken equation-23.23 mode recovers the sender's real 128-bit secret and opens both messages in every later transfer.
 
 First-use micro-glosses (scalar, base point G, `a·P`, `H`, why B hides b) are inlined so a newcomer to elliptic-curve crypto has an on-ramp without cluttering the narrative for those who already know.
 
@@ -45,6 +48,7 @@ First-use micro-glosses (scalar, base point G, `a·P`, `H`, why B hides b) are i
 - **Reusing the receiver's scalar r:** the *sender's* key A = aG is meant to be reused — Chou-Orlandi run setup once and amortize A over all m transfers, which is exactly where the protocol's speed comes from (2 + 3m exponentiations for m OTs). What must be fresh per transfer is the receiver's scalar r: reuse it and two transfers produce the identical B and the identical key, linking the two choices and repeating key material. Reusing A safely also depends on the transcript-salted KDF above.
 - **Side-channel on choice encoding:** the receiver's B computation differs based on b — implementations must ensure the two code paths take equal time and access the same memory to prevent timing and cache-based choice leakage.
 - **Missing post-quantum security:** Curve25519-based OT is broken by quantum computers. Lattice-based OT (e.g., from LWE) is an active research area without mature standardization.
+- **Semi-honest OT extension:** the extension assumes the receiver follows the protocol. The broken mode sends the malformed first 128 rows from Boneh–Shoup equation 23.23; with the explicitly labelled known-plaintext assumption, those probes recover the sender's secret `r`, after which both messages in every later transfer open. A malicious-secure extension needs an additional consistency check.
 
 ## Real-World Usage
 
@@ -76,6 +80,20 @@ against the real protocol code in `src/ot.ts`:
   `a·(B−A)` are asserted byte-identical (the point both parties reach), the
   reconciled key equals the receiver's actual protocol key, and the unchosen key
   differs — the same identity the teaching panel visualizes.
+
+`src/ext/ext.test.ts` checks the executable extension itself: two random
+N=1,000 runs and one N=100,000 run; the row-wise `q` identity; transpose
+round-trip; the complete toy n=4 sender-view distribution; exact recovery of
+the sender's `r` and both later messages in the corrupt-receiver fixture; and
+the 128 transcript-salted base-OT key identities.
+
+Two published primitive KATs are pinned: one four-block AES-128-CTR vector from
+[NIST SP 800-38A §F.5.1](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38a.pdf)
+(64 bytes, longer than one AES block), and one 1,304-bit SHA-256 long-message
+vector from NIST's [CAVP byte-oriented SHA test set](https://csrc.nist.gov/Projects/cryptographic-algorithm-validation-program/Secure-Hashing)
+(163 bytes, longer than one SHA-256 block). There are no standardized IKNP
+known-answer vectors, so protocol correctness is tested through its algebraic
+identities and end-to-end computed outputs rather than credited to NIST.
 
 ```bash
 npm test          # Vitest unit/property tests (crypto correctness + privacy)

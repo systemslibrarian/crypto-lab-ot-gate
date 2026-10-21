@@ -1,4 +1,5 @@
 import {andosSection, setupAndos} from './andos';
+import {extensionPanel, setupExtension} from './ui-ext';
 import './style.css';
 import {
   senderInit,
@@ -386,25 +387,15 @@ function sectionD(): string {
 
       <div class="subsection">
         <h3>D1. OT Extension (IKNP 2003)</h3>
-        <p>Base OT on elliptic curves requires ~2 ms per OT in the browser. MPC
-           protocols for practical functions need millions of OTs. OT extension
+        <p>Base OT on elliptic curves requires public-key work for every transfer,
+           while MPC protocols for practical functions need many OTs. OT extension
            (Ishai, Kilian, Nissim, Petrank 2003) solves this: from k base OTs,
            generate m&nbsp;≫&nbsp;k random OTs using only symmetric operations
            (hash functions and XOR). The ratio is roughly 128 base OTs →
            millions of extended OTs.</p>
-
-        <div class="table-wrapper" tabindex="0" role="region" aria-label="OT extension cost comparison (scrollable table)">
-          <table>
-            <thead>
-              <tr><th scope="col">Method</th><th scope="col">OTs Needed</th><th scope="col">Time per OT</th><th scope="col">Total (1 M OTs)</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Base OT (X25519)</td><td>1 M</td><td>~2 ms</td><td>~33 minutes</td></tr>
-              <tr><td>OT Extension (IKNP)</td><td>128 base + 1 M ext.</td><td>~0.001 ms</td><td>~1 second</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p>This is why OT extension is used in every practical MPC system.</p>
+        <p>The experiment below measures this browser and projects the base-OT
+           alternative from that measured rate; it does not assume a timing.</p>
+        ${extensionPanel()}
       </div>
 
       <div class="subsection">
@@ -1122,6 +1113,7 @@ function mount(): void {
 
   setupCopyButtons();
   setupAndos();
+  setupExtension();
 
   // B2 demo events
   $('#btn-sender-init').addEventListener('click', () => void onSenderInit());

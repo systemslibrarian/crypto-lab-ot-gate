@@ -467,3 +467,190 @@ test('the 1000-round simulation reports the rate its own hit count implies', asy
   await expect(page.locator('#btn-ddh-auto')).toBeEnabled();
   await expect(page.locator('#sr-status')).toContainText(`guessed ${hits} of ${rounds} correctly`);
 });
+
+// ---------------------------------------------------------------- D1 executable OT extension
+
+function countText(value: string | null): number {
+  return Number((value ?? '').replace(/[^0-9.-]/g, ''));
+}
+
+async function setupExtensionBase(page: Page): Promise<void> {
+  await page.goto('.#section-d');
+  await expect(page.locator('#ext-extend')).toBeDisabled();
+  await expect(page.locator('#ext-extend-reason')).toContainText('cannot proceed');
+  await page.locator('#ext-base').click();
+  await expect(page.locator('#ext-base-count')).toHaveText('128', { timeout: 30_000 });
+  await expect(page.locator('#ext-extend')).toBeEnabled();
+}
+
+async function forceAlternatingChoices(page: Page): Promise<void> {
+  const buttons = page.locator('.ext-choice-bit');
+  await expect(buttons).toHaveCount(16);
+  for (let i = 0; i < 16; i += 1) {
+    const wanted = i % 2 === 0 ? '1' : '2';
+    const button = buttons.nth(i);
+    if (((await button.locator('.ext-choice-value').textContent()) ?? '').trim() !== wanted) {
+      await button.click();
+    }
+  }
+}
+
+async function extendAndCheck(page: Page): Promise<void> {
+  await page.locator('#ext-extend').click();
+  await expect(page.locator('#ext-check')).toBeEnabled({ timeout: 60_000 });
+  await page.locator('#ext-check').click();
+  await expect(page.locator('#ext-verdict')).toBeVisible({ timeout: 60_000 });
+}
+
+test('OT extension printed correctness is derived from every produced transfer', async ({ page }) => {
+  await setupExtensionBase(page);
+  await forceAlternatingChoices(page);
+  await extendAndCheck(page);
+
+  const n = Number(await page.locator('#ext-run-output').getAttribute('data-n'));
+  const correct = countText(await page.locator('#ext-correct-count').textContent());
+  const wrongRejected = countText(await page.locator('#ext-wrong-count').textContent());
+  expect(n).toBe(1_000);
+  expect(correct, 'rendered chosen-message count must equal rendered N').toBe(n);
+  expect(wrongRejected, 'rendered wrong-message rejection count must equal rendered N').toBe(n);
+  await expect(page.locator('#ext-verdict')).toHaveClass(/success/);
+  await expect(page.locator('#ext-verdict')).toContainText('ALL 1,000 CHOSEN MESSAGES RECOVERED');
+  await expect(page.locator('#ext-wrong-verdict')).toHaveClass(/success/);
+});
+
+test('sender q row uses r AND p, preserving the book identity', async ({ page }) => {
+  await setupExtensionBase(page);
+  await forceAlternatingChoices(page);
+  await page.locator('#ext-reveal-r').click();
+  const r = await page.locator('#ext-sender-r').getAttribute('data-bits');
+  expect(r).toMatch(/^[01]{128}$/);
+  await page.locator('#ext-extend').click();
+  await expect(page.locator('.ext-matrix-cell')).toHaveCount(256, { timeout: 60_000 });
+
+  const cells = page.locator('.ext-matrix-cell');
+  for (let i = 0; i < 16; i += 1) {
+    const choice = i % 2 === 0 ? 1 : 2;
+    for (let j = 0; j < 16; j += 1) {
+      const label = await cells.nth(i * 16 + j).getAttribute('aria-label');
+      const match = /u ([01]), v ([01]), p ([01]), C ([01]), q ([01])/.exec(label ?? '');
+      expect(match, `unparseable matrix cell: ${label}`).not.toBeNull();
+      const u = Number(match![1]);
+      const c = Number(match![4]);
+      const q = Number(match![5]);
+      expect(c, `row ${i + 1} codeword bit`).toBe(choice === 2 ? 1 : 0);
+      expect(q, `row ${i + 1}, column ${j + 1} q identity`).toBe(
+        u ^ (choice === 2 ? Number(r![j]) : 0),
+      );
+    }
+  }
+});
+
+test('hash branch domain separation keeps both receiver choices correct', async ({ page }) => {
+  await setupExtensionBase(page);
+  await forceAlternatingChoices(page);
+  await extendAndCheck(page);
+  await expect(page.locator('#ext-correct-count')).toHaveText('1,000');
+  await expect(page.locator('#ext-verdict')).toHaveClass(/success/);
+});
+
+test('rendered transpose keeps all 128 base coordinates aligned', async ({ page }) => {
+  await setupExtensionBase(page);
+  await forceAlternatingChoices(page);
+  await extendAndCheck(page);
+  await expect(page.locator('#ext-wrong-count')).toHaveText('1,000');
+  await expect(page.locator('#ext-wrong-verdict')).toHaveClass(/success/);
+});
+
+test('displayed OT-extension measurements are recomputed from printed inputs', async ({ page }) => {
+  await setupExtensionBase(page);
+  await extendAndCheck(page);
+
+  const n = countText(await page.locator('#ext-online-count').textContent());
+  const bytes = countText(await page.locator('#ext-online-bytes').textContent());
+  const hashes = countText(await page.locator('#ext-hash-calls').textContent());
+  const baseCount = countText(await page.locator('#ext-base-count').textContent());
+  const secretCells = page.locator('#ext-sender-r .ext-secret-bit');
+  const perBase = Number(await page.locator('#ext-measured-base-rate').textContent());
+  const projection = Number(await page.locator('#ext-projection').textContent());
+  const onlineMs = Number(await page.locator('#ext-online-ms').textContent());
+
+  expect(baseCount).toBe(128);
+  await expect(secretCells).toHaveCount(baseCount);
+  expect(bytes, 'online p message is one 16-byte row per transfer').toBe(n * 16);
+  expect(hashes, 'sender makes 2N hashes and receiver makes N').toBe(n * 3);
+  expect(projection, 'projection must use the displayed measured per-base-OT rate').toBeCloseTo(
+    perBase * n,
+    3,
+  );
+  expect(onlineMs).toBeGreaterThan(0);
+  expect(Number(await page.locator('#ext-base-ms').textContent())).toBeGreaterThan(0);
+});
+
+test('corrupt receiver fixture keeps chosen checks green while recovering r and both later messages', async ({
+  page,
+}) => {
+  await setupExtensionBase(page);
+  await page.locator('#ext-reveal-r').click();
+  const senderR = await page.locator('#ext-sender-r').getAttribute('data-bits');
+  await page.locator('#ext-malicious').check();
+  await expect(page.locator('#ext-negative-claim')).toBeVisible();
+  await expect(page.locator('#ext-negative-claim')).toHaveText(
+    "This OT extension is secure only against honest-but-curious parties: a receiver who deviates learns the sender's secret r, and with it both messages of every later transfer.",
+  );
+  await extendAndCheck(page);
+
+  const n = Number(await page.locator('#ext-run-output').getAttribute('data-n'));
+  const recoveredR = await page.locator('#ext-recovered-r').getAttribute('data-bits');
+  expect(recoveredR, 'the revealed recovered r must equal the page-printed sender r').toBe(senderR);
+  expect(countText(await page.locator('#ext-correct-count').textContent())).toBe(n);
+  expect(countText(await page.locator('#ext-both-count').textContent())).toBe(n - 128);
+  await expect(page.locator('#ext-verdict')).toHaveText(
+    "ALL N TRANSFERS CORRECT — AND THE SENDER'S SECRET r RECOVERED",
+  );
+  await expect(page.locator('#ext-verdict')).toHaveClass(/alarm/);
+  await expect(page.locator('#ext-verdict')).toHaveClass(/success/);
+  await expect(page.locator('#ext-r-verdict')).toContainText('128 / 128');
+  await expect(page.locator('#ext-both-verdict')).toContainText(
+    `BOTH MESSAGES OPENED FOR ${n - 128} / ${n - 128} LATER TRANSFERS`,
+  );
+});
+
+test('changing N retires a verdict while re-selecting the same N is a no-op', async ({ page }) => {
+  await setupExtensionBase(page);
+  await extendAndCheck(page);
+  const verdict = await page.locator('#ext-verdict').textContent();
+
+  // check() on the already-selected value must not dispatch a change or retire anything.
+  await page.locator('input[name="ext-count"][value="1000"]').check();
+  await expect(page.locator('#ext-verdict')).toHaveText(verdict ?? '');
+
+  await page.locator('input[name="ext-count"][value="10000"]').check();
+  await expect(page.locator('#ext-verdict')).toBeHidden();
+  await expect(page.locator('#ext-status')).toContainText('verdict retired');
+  await expect(page.locator('#ext-check')).toBeDisabled();
+});
+
+test('fresh base setup retires the prior extension verdict by name', async ({ page }) => {
+  await setupExtensionBase(page);
+  await extendAndCheck(page);
+  await page.locator('#ext-base').click();
+  await expect(page.locator('#ext-verdict')).toBeHidden();
+  await expect(page.locator('#ext-status')).toContainText('previous extension verdict was retired', {
+    timeout: 30_000,
+  });
+  await expect(page.locator('#ext-base-count')).toHaveText('128');
+});
+
+test('cancelling a 100,000-transfer run clears partial counters and leaves no stale success', async ({
+  page,
+}) => {
+  await setupExtensionBase(page);
+  await page.locator('input[name="ext-count"][value="100000"]').check();
+  await page.locator('#ext-extend').click();
+  await expect(page.locator('#ext-cancel')).toBeVisible();
+  await page.locator('#ext-cancel').click();
+  await expect(page.locator('#ext-status')).toContainText('Cancelled');
+  await expect(page.locator('#ext-verdict')).toBeHidden();
+  await expect(page.locator('#ext-online-count')).toHaveText('—');
+  await expect(page.locator('#ext-check')).toBeDisabled();
+});
