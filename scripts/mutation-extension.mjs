@@ -17,7 +17,7 @@ const mutations = [
     verdict: 'sender q identity',
     file: 'src/ext/iknp.ts',
     from: 'q[b] = selected[b] ^ (setup.senderChoiceBytes[b] & p[b]);',
-    to: 'q[b] = selected[b];',
+    to: 'q[b] = selected[b] ^ (p[b] & 0);',
     test: 'sender q row uses r AND p, preserving the book identity',
   },
   {
