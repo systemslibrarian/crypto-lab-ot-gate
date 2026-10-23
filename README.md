@@ -27,7 +27,7 @@ See the [Applied Cryptography reading path](https://crypto-lab.systemslibrarian.
 ## When to Use It
 
 - Use OT as the base primitive when building MPC protocols that evaluate arbitrary boolean or arithmetic circuits — OT extension generates the required volume of OTs efficiently.
-- Use OT-based private set intersection when two parties need to find common elements without revealing their full sets — deployed in ad measurement and contact discovery.
+- Use an OT-extension-based private set intersection protocol when two parties need to find common elements without revealing their full sets — efficient PSI research includes this construction family.
 - Do not use base OT (without extension) when millions of OTs are required — the elliptic curve cost is prohibitive. Use IKNP OT extension instead.
 - Do not use this protocol in post-quantum threat models — discrete log on Curve25519, and with it CDH, is broken by Shor's algorithm. Post-quantum OT from lattice assumptions exists but is not standardized.
 - Do not use OT alone when the computation involves more than two parties — use full MPC frameworks like SPDZ or ABY.
@@ -60,11 +60,10 @@ First-use micro-glosses (scalar, base point G, `a·P`, `H`, why B hides b) are i
 
 ## Real-World Usage
 
-- **SCALE-MAMBA / SPDZ protocol:** uses OT extension (built on base OT) to generate Beaver multiplication triples in the offline phase, enabling general-purpose secure computation.
-- **Google/Meta private set intersection:** deployed PSI protocols using OT extension for privacy-preserving ad measurement, allowing conversion attribution without sharing raw user identifiers.
-- **IRTF Prio3 / VDAF (`draft-irtf-cfrg-vdaf`, still an Internet-Draft, not an RFC):** uses a related secret-sharing and MPC approach for aggregate telemetry without revealing individual measurements.
-- **EMP-toolkit:** open-source MPC research library with optimized IKNP OT extension, used in academic work on private machine learning and secure auctions.
-- **OpenMined PySyft:** uses OT-based protocols for federated learning with cryptographic privacy guarantees beyond differential privacy alone.
+- **[MASCOT](https://eprint.iacr.org/2016/505) / SPDZ-style MPC:** MASCOT uses OT-based preprocessing to generate authenticated multiplication material for a SPDZ-style online phase. OT is one preprocessing route, not a property of every protocol bearing the SPDZ name.
+- **Private set intersection:** high-performance PSI research includes OT-extension constructions. [Google's published private intersection-sum work](https://research.google/pubs/private-intersection-sum-protocols-with-applications-to-attributing-aggregate-ad-conversions/) says its deployed ad-conversion protocol used Diffie–Hellman double masking and evaluated random-OT alternatives; [Meta's published PSI work](https://engineering.fb.com/2023/08/08/security/how-meta-is-improving-password-security-and-preserving-privacy/) includes private password lookup. Those deployments demonstrate PSI applications, not deployment of this lab's exact IKNP construction.
+- **[IRTF Prio3 / VDAF](https://datatracker.ietf.org/doc/draft-irtf-cfrg-vdaf/) (`draft-irtf-cfrg-vdaf`, still an Internet-Draft, not an RFC):** uses a related secret-sharing and MPC approach for aggregate telemetry without revealing individual measurements.
+- **[EMP-toolkit](https://github.com/emp-toolkit/emp-ot):** open-source MPC research software with concrete base-OT and IKNP-style OT-extension implementations.
 
 ## Testing
 
@@ -73,7 +72,9 @@ in-app "correctness" button. `npm test` runs a Vitest suite (`src/ot.test.ts`)
 against the real protocol code in `src/ot.ts`:
 
 - **Correctness:** for both choice bits, the receiver recovers exactly M_b, over
-  a fixed check and 25 random sessions.
+  a fixed check and 25 random sessions. Exact rejection sampling is exercised at
+  the field-order boundary, and the normally rare receiver scalar `r = 0` is
+  forced for both choices to verify full-subgroup coverage and matching keys.
 - **Receiver privacy:** the receiver's key fails to decrypt M_{1-b} (AES-256-GCM
   authentication rejects), and the receiver key equals the *chosen* sender key
   but never the other.
@@ -96,7 +97,8 @@ the sender's `r` and both later messages in the corrupt-receiver fixture; and
 the 128 transcript-salted base-OT key identities.
 
 `src/ext/reuse.test.ts` covers consecutive, concurrent and cancelled batches,
-retired compromised setups, message-size boundaries and truncated buffers. It
+caller-owned choice buffers mutated during awaited work, retired compromised
+setups, message-size boundaries and truncated buffers. It
 compares repeated-run AES expansion and global-index SHA-256 pads with independent
 Node crypto calculations. The browser claims suite checks those fresh ranges,
 independently recomputes the displayed full hash, verifies fixed probe choices,
@@ -112,16 +114,20 @@ identities and end-to-end computed outputs rather than credited to NIST.
 
 ```bash
 npm test          # Vitest crypto tests + mutation-report rejection fixtures
+npm run test:workflow # executable least-privilege and fail-closed CI policy
 npm run test:a11y # Playwright claims + WCAG A/AA gate (dark theme, desktop/320px)
 npm run test:mutations # Clean committed tree required; ten replayable source mutations
 ```
 
-CI requires unit tests, the browser/accessibility suite and the mutation gate
-before publishing. Each mutation must compile, change the JavaScript bundle,
-fail its exact owning assertion with retries disabled, then restore the original
-bundle hash and a green owning test. Missing tests, browser/startup failures,
-signals and runner errors are rejected. Node regression fixtures exercise those
-rejections; any nonzero exit alone is insufficient.
+CI runs exact-lock installs, high-severity audits, unit tests, workflow controls
+and production builds on Node 22, 24 and 26. The browser/accessibility suite and
+mutation gate must also pass before the aggregate `build` context succeeds or a
+non-PR run receives Pages deployment authority. Each mutation must compile,
+change the JavaScript bundle, fail its exact owning assertion with retries
+disabled, then restore the original bundle hash and a green owning test. Missing
+tests, browser/startup failures, signals and runner errors are rejected. Node
+regression fixtures exercise those rejections; any nonzero exit alone is
+insufficient.
 
 ## How to Run Locally
 

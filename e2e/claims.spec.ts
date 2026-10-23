@@ -312,6 +312,35 @@ test('re-initializing clears the finished run rather than leaving it on screen',
   );
 });
 
+test('message and choice controls cannot drift away from in-flight or completed evidence', async ({
+  page,
+}) => {
+  await page.goto('.');
+  await page.locator('#btn-sender-init').click();
+  await expect(page.locator('#btn-receiver-choose')).toBeEnabled({ timeout: 15_000 });
+  await page.locator('#choice-1').check();
+  await page.locator('#btn-receiver-choose').click();
+
+  for (const id of ['#m0-input', '#m1-input', '#choice-0', '#choice-1']) {
+    await expect(page.locator(id)).toBeDisabled();
+  }
+  await expect(page.locator('#privacy-audit')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#receiver-output .decrypted-msg')).toContainText(`Decrypted M1: ${M1}`);
+  await expect(page.locator('#m1-input')).toHaveValue(M1);
+  await expect(page.locator('#choice-1')).toBeChecked();
+  for (const id of ['#m0-input', '#m1-input', '#choice-0', '#choice-1']) {
+    await expect(page.locator(id)).toBeDisabled();
+  }
+
+  await page.locator('#btn-sender-init').click();
+  await expect(page.locator('#btn-receiver-choose')).toBeEnabled({ timeout: 15_000 });
+  await expect(page.locator('#receiver-output')).toBeEmpty();
+  await expect(page.locator('#privacy-audit')).toBeHidden();
+  for (const id of ['#m0-input', '#m1-input', '#choice-0', '#choice-1']) {
+    await expect(page.locator(id)).toBeEnabled();
+  }
+});
+
 // ---------------------------------------------------------------- C1
 
 test('the correctness check reports the run it actually performed', async ({ page }) => {

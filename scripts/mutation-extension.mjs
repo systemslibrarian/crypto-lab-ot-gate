@@ -33,8 +33,8 @@ const mutations = [
     id: 'reverse-u-transpose',
     verdict: '128-coordinate alignment',
     file: 'src/ext/iknp.ts',
-    from: 'const uRows = await transposeColumnsChunked(zeroColumns, choices.length, {',
-    to: 'const uRows = await transposeColumnsChunked([...zeroColumns].reverse(), choices.length, {',
+    from: 'const uRows = await transposeColumnsChunked(zeroColumns, ownedChoices.length, {',
+    to: 'const uRows = await transposeColumnsChunked([...zeroColumns].reverse(), ownedChoices.length, {',
     test: 'rendered transpose keeps all 128 base coordinates aligned',
   },
   {

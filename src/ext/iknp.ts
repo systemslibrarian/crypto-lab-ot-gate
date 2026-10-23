@@ -145,42 +145,46 @@ export async function receiverMessage(
   options: RunOptions = {},
 ): Promise<ReceiverMessageState> {
   assertAllowedCount(choices.length);
+  // Own the caller's input before the first await. Otherwise a caller can
+  // mutate its buffer while AES expansion is in flight and silently change the
+  // public p rows, returned choices, and later verification target.
+  const ownedChoices = choices.slice();
   if (setup.n !== 128 || setup.receiverKeyPairs.length !== 128) {
     throw new RangeError('the live extension requires exactly 128 base OTs');
   }
-  if (choices.some((choice) => choice !== 1 && choice !== 2)) {
+  if (ownedChoices.some((choice) => choice !== 1 && choice !== 2)) {
     throw new RangeError('every receiver choice must be 1 or 2');
   }
   checkAbort(options.signal);
-  const firstIndex = reserveTransferRange(setup, choices.length);
+  const firstIndex = reserveTransferRange(setup, ownedChoices.length);
   options.onProgress?.({ phase: 'receiver AES columns', completed: 0, total: 256 });
   const expanded = await Promise.all(
     setup.receiverKeyPairs.flatMap((pair) => [
-      expandColumn(pair.zero, choices.length, firstIndex),
-      expandColumn(pair.one, choices.length, firstIndex),
+      expandColumn(pair.zero, ownedChoices.length, firstIndex),
+      expandColumn(pair.one, ownedChoices.length, firstIndex),
     ]),
   );
   checkAbort(options.signal);
   const zeroColumns = setup.receiverKeyPairs.map((_, j) => expanded[j * 2]);
   const oneColumns = setup.receiverKeyPairs.map((_, j) => expanded[j * 2 + 1]);
-  const uRows = await transposeColumnsChunked(zeroColumns, choices.length, {
+  const uRows = await transposeColumnsChunked(zeroColumns, ownedChoices.length, {
     signal: options.signal,
     chunkSize: WORK_CHUNK,
   });
-  const vRows = await transposeColumnsChunked(oneColumns, choices.length, {
+  const vRows = await transposeColumnsChunked(oneColumns, ownedChoices.length, {
     signal: options.signal,
     chunkSize: WORK_CHUNK,
   });
-  const pRows = new Uint8Array(choices.length * ROW_BYTES);
-  for (let start = 0; start < choices.length; start += WORK_CHUNK) {
-    const end = Math.min(choices.length, start + WORK_CHUNK);
+  const pRows = new Uint8Array(ownedChoices.length * ROW_BYTES);
+  for (let start = 0; start < ownedChoices.length; start += WORK_CHUNK) {
+    const end = Math.min(ownedChoices.length, start + WORK_CHUNK);
     for (let i = start; i < end; i += 1) {
-      const p = receiverPRow(rowAt(uRows, i), rowAt(vRows, i), choices[i] as 1 | 2);
+      const p = receiverPRow(rowAt(uRows, i), rowAt(vRows, i), ownedChoices[i] as 1 | 2);
       pRows.set(p, i * ROW_BYTES);
     }
-    await yieldChunk(options, 'receiver message p', end, choices.length);
+    await yieldChunk(options, 'receiver message p', end, ownedChoices.length);
   }
-  return { firstIndex, count: choices.length, rowBytes: ROW_BYTES, choices: choices.slice(), uRows, vRows, pRows };
+  return { firstIndex, count: ownedChoices.length, rowBytes: ROW_BYTES, choices: ownedChoices, uRows, vRows, pRows };
 }
 
 export async function senderOutputs(

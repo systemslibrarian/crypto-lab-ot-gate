@@ -9,7 +9,7 @@
  */
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, randomIndex, receiverChoose, senderInit } from '../ot';
+import { bytesToHex, multiplyPoint, randomIndex, receiverChoose, senderInit } from '../ot';
 
 const Point = ed25519.Point;
 
@@ -121,7 +121,7 @@ export async function setupBaseOTs(n = 128): Promise<BaseOTSetup> {
       baseSender.ABytes,
       baseReceiver.BBytes,
       j + 1,
-      APoint.multiply(baseReceiver.r).toBytes(),
+      multiplyPoint(APoint, baseReceiver.r).toBytes(),
     );
 
     receiverKeyPairs.push({ zero: k0, one: k1 });

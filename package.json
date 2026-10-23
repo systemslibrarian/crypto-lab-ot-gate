@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run && node --test scripts/mutation-report.test.mjs",
+    "test:workflow": "node --test scripts/workflow-controls.test.mjs",
     "test:a11y": "playwright test",
     "test:mutations": "node scripts/mutation-extension.mjs"
   },

@@ -401,19 +401,20 @@ function sectionD(): string {
       <div class="subsection">
         <h3>D2. Real MPC Systems Using OT</h3>
         <ul>
-          <li><strong>SCALE-MAMBA / SPDZ:</strong> uses OT extension for the offline
-              phase that generates Beaver triples for arithmetic circuit evaluation.
-              Used in academic MPC research and some financial applications.</li>
+          <li><strong>MASCOT / SPDZ-style MPC:</strong> MASCOT uses OT-based
+              preprocessing to generate authenticated multiplication material for
+              a SPDZ-style online phase; OT is one preprocessing route, not a
+              property of every protocol called SPDZ.</li>
           <li><strong>EMP-toolkit (Wang et al.):</strong> open-source MPC library
-              with optimized OT extension. Used in research on private set
-              intersection and secure machine learning.</li>
-          <li><strong>PSI (Private Set Intersection):</strong> Google and Meta have
-              deployed PSI protocols using OT extension for ad measurement without
-              sharing raw user data. The IETF PRIO protocol uses a related approach
-              for aggregate telemetry.</li>
-          <li><strong>Oblivious RAM (ORAM):</strong> uses OT as a building block for
-              hiding access patterns to cloud storage. PathORAM and Circuit ORAM
-              depend on OT or OT-adjacent primitives.</li>
+              with concrete base-OT and IKNP-style extension implementations.</li>
+          <li><strong>PSI (Private Set Intersection):</strong> high-performance PSI
+              research includes OT-extension constructions. Google's published ad
+              conversion deployment used Diffie–Hellman double masking, while
+              Meta's published PSI work includes private password lookup; those
+              deployments illustrate PSI applications, not deployment of this
+              exact IKNP construction.</li>
+          <li><strong>Prio3 / VDAF:</strong> aggregate telemetry uses secret sharing
+              and MPC with a related privacy goal, but it is not an OT protocol.</li>
         </ul>
       </div>
 
@@ -463,6 +464,13 @@ function footer(): string {
 // ═══════════════════════════════════════════════════════════════════════
 
 let currentSender: SenderState | null = null;
+
+function setDemoInputsDisabled(disabled: boolean): void {
+  for (const id of ['m0-input', 'm1-input', 'choice-0', 'choice-1']) {
+    const control = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement;
+    control.disabled = disabled;
+  }
+}
 
 // Push a short, human-readable sentence to the screen-reader status region.
 // Hex values are visual reference only and are kept out of AT narration.
@@ -694,6 +702,7 @@ function handleDemoError(
   senderBtn.textContent = 'Reset & Re-initialize';
   senderBtn.disabled = false;
   receiverBtn.disabled = true;
+  setDemoInputsDisabled(false);
 }
 
 async function onSenderInit(): Promise<void> {
@@ -711,6 +720,7 @@ async function onSenderInit(): Promise<void> {
   // Disable buttons during async work to prevent race conditions
   senderBtn.disabled = true;
   receiverBtn.disabled = true;
+  setDemoInputsDisabled(true);
 
   // Reset state
   currentSender = null;
@@ -749,6 +759,7 @@ async function onSenderInit(): Promise<void> {
     // Re-enable buttons
     senderBtn.disabled = false;
     receiverBtn.disabled = false;
+    setDemoInputsDisabled(false);
   } catch (err) {
     handleDemoError(err, senderBtn, receiverBtn);
   }
@@ -771,6 +782,9 @@ async function onReceiverChoose(): Promise<void> {
   // Disable buttons during async work to prevent race conditions
   senderBtn.disabled = true;
   receiverBtn.disabled = true;
+  // Keep the displayed messages and choice bound to the evidence this run
+  // produces. A reset clears the evidence before these controls unlock again.
+  setDemoInputsDisabled(true);
 
   const choiceEl = document.querySelector<HTMLInputElement>('input[name="choice"]:checked');
   const b = (choiceEl ? Number(choiceEl.value) : 0) as 0 | 1;
