@@ -63,6 +63,22 @@ describe('fresh transfer positions under a reusable base setup', () => {
     expect(batches[1].firstIndex).toBeGreaterThan(batches[0].firstIndex + batches[0].count - 1);
   });
 
+  it('owns receiver choices before asynchronous expansion lets the caller mutate its buffer', async () => {
+    const setup = await setupBaseOTs();
+    const callerChoices = new Uint8Array(1000).fill(1);
+    const pending = receiverMessage(setup, callerChoices);
+    callerChoices.fill(2);
+
+    const receiver = await pending;
+    expect(receiver.choices.every((choice) => choice === 1)).toBe(true);
+    const sender = await senderOutputs(setup, receiver);
+    const messages = createMessagePairs(1000);
+    const masks = await receiverOutputs(receiver);
+    expect(
+      (await verifyAll(receiver, messages, maskMessages(messages, sender), masks)).allCorrect,
+    ).toBe(true);
+  });
+
   it('burns the range of a cancelled batch instead of handing it to the next run', async () => {
     const setup = await setupBaseOTs();
     const controller = new AbortController();

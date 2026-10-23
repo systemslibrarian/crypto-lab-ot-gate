@@ -25,6 +25,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 const Point = ed25519.Point;
 const G = Point.BASE;
 const ORDER = Point.Fn.ORDER;
+const UINT32_RANGE = 0x100000000;
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -57,13 +58,25 @@ export interface EncryptionResult {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function randomScalar(): bigint {
-  const bytes = crypto.getRandomValues(new Uint8Array(64));
-  let val = 0n;
-  for (let i = 0; i < 64; i++) {
-    val = (val << 8n) | BigInt(bytes[i]);
+/**
+ * Sample exactly from the Ed25519 prime-order scalar field. Masking to 253
+ * bits and rejecting values outside the field avoids modulo bias. Receiver
+ * scalars include zero so rG and A+rG each cover the full subgroup; sender
+ * secrets reject zero because A must not be the identity.
+ */
+export function randomScalar(nonZero: boolean): bigint {
+  for (;;) {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    bytes[0] &= 0x1f;
+    let value = 0n;
+    for (const byte of bytes) value = (value << 8n) | BigInt(byte);
+    if (value < ORDER && (!nonZero || value !== 0n)) return value;
   }
-  return (val % (ORDER - 1n)) + 1n;
+}
+
+/** Noble's constant-time multiply API deliberately rejects scalar zero. */
+export function multiplyPoint(point: typeof G, scalar: bigint): typeof G {
+  return scalar === 0n ? Point.ZERO : point.multiply(scalar);
 }
 
 export function bytesToHex(bytes: Uint8Array): string {
@@ -82,10 +95,10 @@ export function bigintToHex(n: bigint): string {
  * discipline — never Math.random() — even for a cosmetic shuffle.
  */
 export function randomIndex(n: number): number {
-  if (n <= 0 || !Number.isInteger(n)) {
-    throw new RangeError('randomIndex needs a positive integer bound');
+  if (n <= 0 || n > UINT32_RANGE || !Number.isInteger(n)) {
+    throw new RangeError('randomIndex needs an integer bound from 1 through 2^32');
   }
-  const limit = Math.floor(0x100000000 / n) * n; // largest multiple of n ≤ 2^32
+  const limit = Math.floor(UINT32_RANGE / n) * n; // largest multiple of n ≤ 2^32
   const buf = new Uint32Array(1);
   let x: number;
   do {
@@ -149,7 +162,7 @@ async function aesDecrypt(
 
 /** Step 1 — Sender generates scalar a and public point A = aG */
 export function senderInit(): SenderState {
-  const a = randomScalar();
+  const a = randomScalar(true);
   const APoint = G.multiply(a);
   const ABytes = APoint.toBytes();
   return { a, AHex: bytesToHex(ABytes), ABytes };
@@ -157,16 +170,16 @@ export function senderInit(): SenderState {
 
 /** Step 2 — Receiver picks choice bit b, generates scalar r, computes B */
 export function receiverChoose(ABytes: Uint8Array, b: 0 | 1): ReceiverState {
-  const r = randomScalar();
+  const r = randomScalar(false);
   const APoint = Point.fromHex(bytesToHex(ABytes));
-  const rG = G.multiply(r);
+  const rG = multiplyPoint(G, r);
 
   // b = 0 → B = rG ; b = 1 → B = A + rG
   const BPoint = b === 0 ? rG : APoint.add(rG);
   const BBytes = BPoint.toBytes();
 
   // Receiver's key: H(r · A)
-  const keyBytes = sha256(APoint.multiply(r).toBytes());
+  const keyBytes = sha256(multiplyPoint(APoint, r).toBytes());
 
   return {
     b,
@@ -254,17 +267,17 @@ export function generateDDHPoints(): {
   b1Index: number;
   AHex: string;
 } {
-  const a = randomScalar();
+  const a = randomScalar(true);
   const APoint = G.multiply(a);
 
-  const r1 = randomScalar();
-  const r2 = randomScalar();
-  const r3 = randomScalar();
+  const r1 = randomScalar(false);
+  const r2 = randomScalar(false);
+  const r3 = randomScalar(false);
 
   const pts = [
-    bytesToHex(G.multiply(r1).toBytes()),
-    bytesToHex(G.multiply(r2).toBytes()),
-    bytesToHex(APoint.add(G.multiply(r3)).toBytes()),
+    bytesToHex(multiplyPoint(G, r1).toBytes()),
+    bytesToHex(multiplyPoint(G, r2).toBytes()),
+    bytesToHex(APoint.add(multiplyPoint(G, r3)).toBytes()),
   ];
 
   // Shuffle: place the b=1 point at a random index (getRandomValues, not
@@ -334,7 +347,7 @@ export function reconcileKeys(
   const BPoint = Point.fromHex(bytesToHex(BBytes));
 
   // Receiver's independent route: r · A.
-  const receiverPoint = APoint.multiply(r);
+  const receiverPoint = multiplyPoint(APoint, r);
   // Sender's independent route for the chosen bit.
   const senderChosenPoint =
     b === 0 ? BPoint.multiply(a) : BPoint.subtract(APoint).multiply(a);
