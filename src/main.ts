@@ -401,19 +401,20 @@ function sectionD(): string {
       <div class="subsection">
         <h3>D2. Real MPC Systems Using OT</h3>
         <ul>
-          <li><strong>SCALE-MAMBA / SPDZ:</strong> uses OT extension for the offline
-              phase that generates Beaver triples for arithmetic circuit evaluation.
-              Used in academic MPC research and some financial applications.</li>
+          <li><strong>MASCOT / SPDZ-style MPC:</strong> MASCOT uses OT-based
+              preprocessing to generate authenticated multiplication material for
+              a SPDZ-style online phase; OT is one preprocessing route, not a
+              property of every protocol called SPDZ.</li>
           <li><strong>EMP-toolkit (Wang et al.):</strong> open-source MPC library
-              with optimized OT extension. Used in research on private set
-              intersection and secure machine learning.</li>
-          <li><strong>PSI (Private Set Intersection):</strong> Google and Meta have
-              deployed PSI protocols using OT extension for ad measurement without
-              sharing raw user data. The IETF PRIO protocol uses a related approach
-              for aggregate telemetry.</li>
-          <li><strong>Oblivious RAM (ORAM):</strong> uses OT as a building block for
-              hiding access patterns to cloud storage. PathORAM and Circuit ORAM
-              depend on OT or OT-adjacent primitives.</li>
+              with concrete base-OT and IKNP-style extension implementations.</li>
+          <li><strong>PSI (Private Set Intersection):</strong> high-performance PSI
+              research includes OT-extension constructions. Google's published ad
+              conversion deployment used Diffie–Hellman double masking, while
+              Meta's published PSI work includes private password lookup; those
+              deployments illustrate PSI applications, not deployment of this
+              exact IKNP construction.</li>
+          <li><strong>Prio3 / VDAF:</strong> aggregate telemetry uses secret sharing
+              and MPC with a related privacy goal, but it is not an OT protocol.</li>
         </ul>
       </div>
 
@@ -464,6 +465,13 @@ function footer(): string {
 
 let currentSender: SenderState | null = null;
 
+function setDemoInputsDisabled(disabled: boolean): void {
+  for (const id of ['m0-input', 'm1-input', 'choice-0', 'choice-1']) {
+    const control = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement;
+    control.disabled = disabled;
+  }
+}
+
 // Push a short, human-readable sentence to the screen-reader status region.
 // Hex values are visual reference only and are kept out of AT narration.
 function announce(msg: string): void {
@@ -497,11 +505,6 @@ function highlightPanel(which: 'sender' | 'receiver' | null): void {
   document.querySelector('.demo-receiver')?.classList.toggle('is-active', which === 'receiver');
 }
 
-// Strip tags so an HTML label can be reused in a plain-text aria-label.
-function plain(s: string): string {
-  return s.replace(/<[^>]*>/g, '');
-}
-
 // A first-use micro-definition. Renders the term with a dotted underline and an
 // inline aside gloss that is available to sighted users (title + visible ⓘ) and
 // to screen readers (the gloss text is real DOM text, not color-only).
@@ -521,15 +524,20 @@ function chip(name: string, kind: string): string {
 function hexBlock(
   label: string,
   value: string,
-  opts: { private?: boolean; display?: string } = {},
+  opts: { private?: boolean; display?: string; ariaLabel?: string } = {},
 ): string {
   const labelCls = opts.private ? 'hex-label private' : 'hex-label';
   const shown = opts.display ?? value;
+  // A label that carries markup must bring its own plain text. Deriving one by
+  // stripping tags needs a sanitizer, and a single-pass tag strip is never a
+  // complete one. `src/main.label.test.ts` fails any marked-up label that
+  // arrives here without `ariaLabel`.
+  const ariaLabel = opts.ariaLabel ?? label;
   return `
     <div class="hex-block">
       <div class="hex-block-head">
         <span class="${labelCls}">${label}</span>
-        <button class="copy-btn" type="button" data-copy="${value}" aria-label="Copy ${plain(label)} value">Copy</button>
+        <button class="copy-btn" type="button" data-copy="${value}" aria-label="Copy ${ariaLabel} value">Copy</button>
       </div>
       <span class="hex-value" aria-hidden="true">${shown}</span>
     </div>`;
@@ -588,7 +596,7 @@ function renderReconcile(rec: ReturnType<typeof reconcileKeys>): void {
       Watch the two routes meet. You chose <strong>b = ${rec.b}</strong>, so ${bStep}
     </p>
     <div class="reconcile-grid" role="img"
-         aria-label="Receiver computes r times A and sender computes ${plain(rec.senderPointExpr)}; both reduce to the same point a r G, so the derived keys are identical.">
+         aria-label="Receiver computes r times A and sender computes ${rec.senderPointExpr}; both reduce to the same point a r G, so the derived keys are identical.">
       <div class="reconcile-lane receiver-lane">
         <div class="reconcile-party">${chip('Receiver', 'receiver')} knows <em>r</em></div>
         <div class="reconcile-op">r · A</div>
@@ -623,7 +631,7 @@ function renderReconcile(rec: ReturnType<typeof reconcileKeys>): void {
 
   announce(
     rec.sharedMatches
-      ? `Key reconciliation: the receiver's r times A and the sender's ${plain(rec.senderPointExpr)} both reduce to the same point a r G, so their keys match. The sender's other key lands elsewhere.`
+      ? `Key reconciliation: the receiver's r times A and the sender's ${rec.senderPointExpr} both reduce to the same point a r G, so their keys match. The sender's other key lands elsewhere.`
       : 'Key reconciliation mismatch — this should not happen.',
   );
 }
@@ -694,6 +702,7 @@ function handleDemoError(
   senderBtn.textContent = 'Reset & Re-initialize';
   senderBtn.disabled = false;
   receiverBtn.disabled = true;
+  setDemoInputsDisabled(false);
 }
 
 async function onSenderInit(): Promise<void> {
@@ -711,6 +720,7 @@ async function onSenderInit(): Promise<void> {
   // Disable buttons during async work to prevent race conditions
   senderBtn.disabled = true;
   receiverBtn.disabled = true;
+  setDemoInputsDisabled(true);
 
   // Reset state
   currentSender = null;
@@ -749,6 +759,7 @@ async function onSenderInit(): Promise<void> {
     // Re-enable buttons
     senderBtn.disabled = false;
     receiverBtn.disabled = false;
+    setDemoInputsDisabled(false);
   } catch (err) {
     handleDemoError(err, senderBtn, receiverBtn);
   }
@@ -771,6 +782,9 @@ async function onReceiverChoose(): Promise<void> {
   // Disable buttons during async work to prevent race conditions
   senderBtn.disabled = true;
   receiverBtn.disabled = true;
+  // Keep the displayed messages and choice bound to the evidence this run
+  // produces. A reset clears the evidence before these controls unlock again.
+  setDemoInputsDisabled(true);
 
   const choiceEl = document.querySelector<HTMLInputElement>('input[name="choice"]:checked');
   const b = (choiceEl ? Number(choiceEl.value) : 0) as 0 | 1;
@@ -807,10 +821,16 @@ async function onReceiverChoose(): Promise<void> {
     const k1Chip = b === 1 ? chip('k₁', 'key-match') : chip('k₁', 'key-nomatch');
     // Show sender keys and ciphertexts
     $('#sender-output').innerHTML +=
-      hexBlock(`${k0Chip} k<sub>0</sub> = H(a·B)`, enc.k0Hex) +
-      hexBlock(`${k1Chip} k<sub>1</sub> = H(a·(B−A))`, enc.k1Hex) +
-      hexBlock('E<sub>0</sub> (encrypted M<sub>0</sub>)', e0Hex, { display: truncHex(e0Hex, 64) }) +
-      hexBlock('E<sub>1</sub> (encrypted M<sub>1</sub>)', e1Hex, { display: truncHex(e1Hex, 64) });
+      hexBlock(`${k0Chip} k<sub>0</sub> = H(a·B)`, enc.k0Hex, { ariaLabel: 'k₀ k0 = H(a·B)' }) +
+      hexBlock(`${k1Chip} k<sub>1</sub> = H(a·(B−A))`, enc.k1Hex, { ariaLabel: 'k₁ k1 = H(a·(B−A))' }) +
+      hexBlock('E<sub>0</sub> (encrypted M<sub>0</sub>)', e0Hex, {
+        display: truncHex(e0Hex, 64),
+        ariaLabel: 'E0 (encrypted M0)',
+      }) +
+      hexBlock('E<sub>1</sub> (encrypted M<sub>1</sub>)', e1Hex, {
+        display: truncHex(e1Hex, 64),
+        ariaLabel: 'E1 (encrypted M1)',
+      });
 
     addChannelMsg('(E₀, E₁) → Receiver', truncHex(e0Hex, 20) + ' | ' + truncHex(e1Hex, 20));
 
@@ -830,6 +850,7 @@ async function onReceiverChoose(): Promise<void> {
       hexBlock(
         `${chip('k' + (b === 0 ? '₀' : '₁'), 'key-match')} k<sub>b</sub> = H(r·A) — matches the sender's k<sub>${b}</sub> (same green chip)`,
         receiver.keyHex,
+        { ariaLabel: `k${b === 0 ? '₀' : '₁'} kb = H(r·A) — matches the sender's k${b} (same green chip)` },
       ) +
       `<div class="decrypted-msg">
         <span aria-hidden="true">✅ </span><strong>Decrypted M<sub>${b}</sub>:</strong> ${escapeHtml(decrypted)}

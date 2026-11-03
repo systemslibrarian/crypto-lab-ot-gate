@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import {
@@ -12,11 +12,35 @@ import {
   simulateDDHGuesses,
   reconcileKeys,
   randomIndex,
+  randomScalar,
+  multiplyPoint,
   bytesToHex,
 } from './ot';
 
 const Point = ed25519.Point;
 const G = Point.BASE;
+
+function scalarBytes(value: bigint): Uint8Array {
+  const bytes = new Uint8Array(32);
+  let remaining = value;
+  for (let i = bytes.length - 1; i >= 0; i -= 1) {
+    bytes[i] = Number(remaining & 0xffn);
+    remaining >>= 8n;
+  }
+  return bytes;
+}
+
+function mockScalarSamples(...samples: Uint8Array[]): void {
+  const queue = samples.map((sample) => sample.slice());
+  vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(((array: Uint8Array) => {
+    const next = queue.shift();
+    if (!next || array.length !== next.length) throw new Error('unexpected random sample request');
+    array.set(next);
+    return array;
+  }) as typeof globalThis.crypto.getRandomValues);
+}
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('Chou-Orlandi Simplest OT — correctness', () => {
   it('receiver recovers exactly M_b for both choice bits', async () => {
@@ -45,6 +69,47 @@ describe('Chou-Orlandi Simplest OT — correctness', () => {
       expect(run.decrypted).toBe(choice === 0 ? m0 : m1);
       // and the privacy invariant must hold every time
       expect(run.otherFailed).toBe(true);
+    }
+  });
+});
+
+describe('exact scalar sampling', () => {
+  it('rejects the field order and zero for a sender secret instead of reducing modulo q', () => {
+    mockScalarSamples(
+      scalarBytes(Point.Fn.ORDER),
+      scalarBytes(0n),
+      scalarBytes(7n),
+    );
+    expect(randomScalar(true)).toBe(7n);
+    expect(globalThis.crypto.getRandomValues).toHaveBeenCalledTimes(3);
+  });
+
+  it('covers the receiver zero boundary for both choices and still reconciles keys', async () => {
+    const sender = senderInit();
+    vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(((array: Uint8Array) => {
+      array.fill(0);
+      return array;
+    }) as typeof globalThis.crypto.getRandomValues);
+
+    for (const choice of [0, 1] as const) {
+      const receiver = receiverChoose(sender.ABytes, choice);
+      expect(receiver.r).toBe(0n);
+      expect(receiver.BHex).toBe(choice === 0 ? Point.ZERO.toHex() : sender.AHex);
+
+      const encryption = await senderEncrypt(sender, receiver.BBytes, 'zero', 'one');
+      const chosen = choice === 0 ? encryption.e0 : encryption.e1;
+      expect(await receiverDecrypt(receiver.keyBytes, chosen)).toBe(choice === 0 ? 'zero' : 'one');
+      expect((choice === 0 ? encryption.k0Hex : encryption.k1Hex)).toBe(receiver.keyHex);
+
+      const reconciled = reconcileKeys(
+        sender.a,
+        receiver.r,
+        sender.ABytes,
+        receiver.BBytes,
+        choice,
+      );
+      expect(reconciled.sharedMatches).toBe(true);
+      expect(reconciled.chosenKeyHex).toBe(receiver.keyHex);
     }
   });
 });
@@ -135,7 +200,7 @@ describe('key-derivation identity (why OT works)', () => {
     const BPoint = Point.fromHex(rState.BHex);
     const APoint = Point.fromHex(sender.AHex);
     expect(bytesToHex(BPoint.subtract(APoint).toBytes())).toBe(
-      bytesToHex(G.multiply(rState.r).toBytes()),
+      bytesToHex(multiplyPoint(G, rState.r).toBytes()),
     );
   });
 });
@@ -211,5 +276,6 @@ describe('randomIndex helper', () => {
     expect(() => randomIndex(0)).toThrow();
     expect(() => randomIndex(-1)).toThrow();
     expect(() => randomIndex(2.5)).toThrow();
+    expect(() => randomIndex(0x100000001)).toThrow();
   });
 });
