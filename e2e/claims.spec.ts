@@ -341,6 +341,37 @@ test('message and choice controls cannot drift away from in-flight or completed 
   }
 });
 
+test('every copy button names its own block in plain words, with no markup', async ({ page }) => {
+  await page.goto('.');
+  await page.locator('#btn-sender-init').click();
+  await expect(page.locator('#btn-receiver-choose')).toBeEnabled({ timeout: 15_000 });
+  await page.locator('#choice-0').check();
+  await page.locator('#btn-receiver-choose').click();
+  await expect(page.locator('#privacy-audit')).toBeVisible({ timeout: 15_000 });
+
+  // The accessible names the page shipped when `hexBlock` derived them by
+  // stripping tags, reproduced exactly so removing that sanitizer changed no
+  // rendering. (The stutters — "k₀ k0", "kb", "E0" — are artefacts of that old
+  // strip, preserved here deliberately rather than quietly reworded under a
+  // security fix.)
+  const labels = await page.locator('.copy-btn').evaluateAll((nodes) =>
+    nodes.map((n) => n.getAttribute('aria-label') ?? ''),
+  );
+  expect(labels).toEqual([
+    'Copy a — sender private scalar (never transmitted) value',
+    'Copy A = aG (sent to receiver) value',
+    'Copy k₀ k0 = H(a·B) value',
+    'Copy k₁ k1 = H(a·(B−A)) value',
+    'Copy E0 (encrypted M0) value',
+    'Copy E1 (encrypted M1) value',
+    'Copy r — receiver private scalar (never transmitted) value',
+    'Copy B (sent to sender) — choice b=0 value',
+    "Copy k₀ kb = H(r·A) — matches the sender's k0 (same green chip) value",
+  ]);
+  // No accessible name may carry markup: that is what the deleted strip was for.
+  for (const label of labels) expect(label).not.toMatch(/[<>]/);
+});
+
 // ---------------------------------------------------------------- C1
 
 test('the correctness check reports the run it actually performed', async ({ page }) => {
