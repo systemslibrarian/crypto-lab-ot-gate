@@ -423,7 +423,7 @@ function sectionD(): string {
         <div class="xref-map">
           <a class="xref-item" href="https://systemslibrarian.github.io/crypto-lab-silent-tally/" target="_blank" rel="noopener">
             <strong>silent-tally</strong>
-            Shamir MPC — additive secret sharing, no OT needed for simple sums
+            Shamir MPC — threshold secret sharing, additively homomorphic, no OT needed for simple sums
           </a>
           <a class="xref-item" href="https://systemslibrarian.github.io/crypto-lab-oblivious-shelf/" target="_blank" rel="noopener">
             <strong>oblivious-shelf</strong>
